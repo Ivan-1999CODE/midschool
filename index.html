@@ -66,10 +66,10 @@
             BookOpen, Gamepad2, LayoutList, Layers, Volume2, ChevronLeft, ChevronRight, 
             CheckCircle, XCircle, Trophy, Star, Sparkles, HelpCircle, RefreshCw, Library, 
             Puzzle, Lightbulb, Music, Map, Wand2, Flag, AlertCircle, ArrowDownLeft, 
-            Shuffle, GraduationCap, PenTool, Coffee, Keyboard, MousePointerClick, Filter
+            Shuffle, GraduationCap, PenTool, Coffee, Keyboard, MousePointerClick, Filter, Eye, Timer, Home, Info
         } from 'lucide-react';
 
-        // --- 語音合成優化修正 ---
+        // --- 語音與音效合成優化 ---
         let availableVoices = [];
         
         const loadVoices = () => {
@@ -104,6 +104,43 @@
             window.speechSynthesis.speak(utterance);
         };
 
+        // 簡單的音效產生器 (Web Audio API)
+        const playSound = (type) => {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                if (type === 'correct') {
+                    // 叮咚聲 (高音)
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(500, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.5);
+                } else {
+                    // 錯誤聲 (低音鋸齒波)
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.3);
+                }
+            } catch (e) {
+                console.error("Audio play failed", e);
+            }
+        };
+
         // --- 工具函式 ---
         const shuffleArray = (array) => {
             if (!array) return [];
@@ -115,7 +152,7 @@
             return newArray;
         };
 
-        // --- 數字題庫生成器 ---
+        // --- 1. 基數 (Cardinal) 生成器 ---
         const generateNumberVocab = () => {
             const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
             const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
@@ -197,183 +234,453 @@
             return pool;
         };
 
-        // --- Unit 5 題庫生成 ---
-        const generateUnit5QuizPool = () => {
-            const months = [
-                { en: "January", ch: "一月", order: "first" },
-                { en: "February", ch: "二月", order: "second" },
-                { en: "March", ch: "三月", order: "third" },
-                { en: "April", ch: "四月", order: "fourth" },
-                { en: "May", ch: "五月", order: "fifth" },
-                { en: "June", ch: "六月", order: "sixth" },
-                { en: "July", ch: "七月", order: "seventh" },
-                { en: "August", ch: "八月", order: "eighth" },
-                { en: "September", ch: "九月", order: "ninth" },
-                { en: "October", ch: "十月", order: "tenth" },
-                { en: "November", ch: "十一月", order: "eleventh" },
-                { en: "December", ch: "十二月", order: "twelfth" }
+        // --- 2. 序數 (Ordinal) 生成器 (1-100) ---
+        const generateOrdinalVocab = () => {
+            const ordinals1to19 = [
+                '', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth',
+                'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth'
             ];
+            const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+            const ordinalsTens = ['', '', 'twentieth', 'thirtieth', 'fortieth', 'fiftieth', 'sixtieth', 'seventieth', 'eightieth', 'ninetieth'];
 
-            const pool = [
-                { q: "______ is the first month of the year.", options: ["January", "February", "March"], ans: "January", hint: "一月是第一個月。" },
-                { q: "Thanksgiving is in ______.", options: ["November", "December", "October"], ans: "November", hint: "感恩節在十一月 (月份用 in)。" },
-                { q: "Christmas is ______ December 25.", options: ["on", "in", "at"], ans: "on", hint: "特定日期用 on。" },
-                { q: "My birthday is ______ June.", options: ["in", "on", "at"], ans: "in", hint: "月份用 in。" },
-                { q: "When is your ______?", options: ["birthday", "birth", "born"], ans: "birthday", hint: "詢問生日。" },
-                { q: "March is the ______ month.", options: ["third", "three", "thirty"], ans: "third", hint: "三月是第三個月 (序數)。" },
-                { q: "Mother's Day is in ______.", options: ["May", "April", "June"], ans: "May", hint: "母親節在五月。" },
-                { q: "Halloween is in ______.", options: ["October", "November", "September"], ans: "October", hint: "萬聖節在十月。" },
-                { q: "New Year's Eve is on December ______.", options: ["31st", "1st", "25th"], ans: "31st", hint: "跨年夜是12月31日。" },
-                { q: "______ is the second month.", options: ["February", "January", "March"], ans: "February", hint: "二月。" },
-                { q: "April is the ______ month.", options: ["fourth", "four", "forty"], ans: "fourth", hint: "第四 (序數)。" },
-                { q: "We eat ______ on Thanksgiving.", options: ["dinner", "lunch", "breakfast"], ans: "dinner", hint: "感恩節晚餐。" },
-                { q: "The cow is a big ______.", options: ["animal", "flower", "food"], ans: "animal", hint: "牛是一種動物。" },
-                { q: "I am hungry. How ______ you?", options: ["about", "are", "is"], ans: "about", hint: "How about you? (你呢？)" },
-                { q: "Wash your hands ______ dinner.", options: ["before", "after", "under"], ans: "before", hint: "晚餐『前』洗手。" },
-                { q: "It is an ______ holiday.", options: ["important", "ugly", "bad"], ans: "important", hint: "這是一個重要的節日。" },
-                { q: "When is the ______?", options: ["date", "day", "year"], ans: "date", hint: "詢問日期。" },
-                { q: "He is a ______ boy.", options: ["lucky", "luck", "luckily"], ans: "lucky", hint: "幸運的男孩。" },
-                { q: "I have ______ one apple.", options: ["only", "one", "on"], ans: "only", hint: "只有一顆。" },
-                { q: "See you ______ week.", options: ["next", "near", "new"], ans: "next", hint: "下週見。" },
-                { q: "I ______ it is going to rain.", options: ["think", "thank", "thin"], ans: "think", hint: "我『認為』。" }
-            ];
+            const vocab = [];
+            for (let i = 1; i <= 100; i++) {
+                let word = '';
+                let abbreviation = i + 'th';
 
-            // 自動生成月份順序題
-            for(let i=0; i<months.length; i++) {
-                const m = months[i];
-                if (Math.random() > 0.7) {
-                    pool.push({
-                        q: `${m.en} is the ______ month.`,
-                        options: [m.order, "one", "ten"], // 簡化選項邏輯
-                        ans: m.order,
-                        hint: `${m.en} 是第幾個月份？`
-                    });
+                // 處理縮寫 (st, nd, rd, th)
+                if (i % 10 === 1 && i % 100 !== 11) abbreviation = i + 'st';
+                else if (i % 10 === 2 && i % 100 !== 12) abbreviation = i + 'nd';
+                else if (i % 10 === 3 && i % 100 !== 13) abbreviation = i + 'rd';
+
+                // 生成單字
+                if (i === 100) word = 'one hundredth';
+                else if (i < 20) word = ordinals1to19[i];
+                else if (i % 10 === 0) word = ordinalsTens[Math.floor(i / 10)];
+                else {
+                    const tenPart = tens[Math.floor(i / 10)];
+                    const onePart = ordinals1to19[i % 10];
+                    word = `${tenPart}-${onePart}`;
                 }
-            }
 
+                vocab.push({
+                    id: `ord-${i}`,
+                    word: word,
+                    part: "adj.",
+                    chinese: `第 ${i}`,
+                    sentence: `This is the ${word} time I have been here.`,
+                    sentence_ch: `這是我第 ${i} 次來這裡。`
+                });
+            }
+            return vocab;
+        };
+
+        const generateOrdinalQuizPool = () => {
+            const pool = [];
+            // 基本不規則
+            pool.push({ q: "1st = ______", options: ["first", "one", "onest"], ans: "first", hint: "第一是不規則變化。" });
+            pool.push({ q: "2nd = ______", options: ["second", "two", "twond"], ans: "second", hint: "第二是不規則變化。" });
+            pool.push({ q: "3rd = ______", options: ["third", "three", "threerd"], ans: "third", hint: "第三是不規則變化。" });
+            pool.push({ q: "5th = ______", options: ["fifth", "fiveth", "five"], ans: "fifth", hint: "Five 變成 Fifth (ve -> f)。" });
+            pool.push({ q: "9th = ______", options: ["ninth", "nineth", "nine"], ans: "ninth", hint: "Nine 去掉 e 變成 Ninth。" });
+            pool.push({ q: "12th = ______", options: ["twelfth", "twelveth", "twelve"], ans: "twelfth", hint: "Twelve (ve -> fth)。" });
+            pool.push({ q: "20th = ______", options: ["twentieth", "twentyth", "twenteth"], ans: "twentieth", hint: "Twenty (y -> ieth)。" });
+            pool.push({ q: "21st = twenty-______", options: ["first", "one", "onest"], ans: "first", hint: "21st = 20 + 1st。" });
+            pool.push({ q: "32nd = thirty-______", options: ["second", "two", "twoth"], ans: "second", hint: "32nd = 30 + 2nd。" });
+            pool.push({ q: "53rd = fifty-______", options: ["third", "three", "threeth"], ans: "third", hint: "53rd = 50 + 3rd。" });
+            
+            // 隨機生成題目
+            for(let i=0; i<30; i++) {
+                const num = Math.floor(Math.random() * 80) + 20; 
+                // 排除整數，專注在複合字
+                if(num % 10 === 0) continue; 
+                
+                const ones = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth'];
+                const tens = ['twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+                
+                const tenDigit = Math.floor(num/10);
+                const oneDigit = num % 10;
+                
+                const correctAns = ones[oneDigit-1];
+                const wrongAns1 = ones[(oneDigit+1)%9];
+                
+                pool.push({ 
+                    q: `第 ${num} (${num}${['st','nd','rd'][oneDigit-1] || 'th'}) = ${tens[tenDigit-2]}-______`, 
+                    options: [correctAns, wrongAns1, "th"], 
+                    ans: correctAns, 
+                    hint: `第 ${num} 的尾數是第 ${oneDigit}`
+                });
+            }
             return shuffleArray(pool).slice(0, 50);
         };
 
-        // --- Unit 5 重組生成器 ---
-        const generateUnit5ScramblePool = () => {
-             const pool = [
-                // 1-10
-                { id: "u5-s1", sentence: "The date of the concert is September twenty-first.", sentence_ch: "音樂會的日期是九月二十一日。" },
-                { id: "u5-s2", sentence: "Thanksgiving is in November.", sentence_ch: "感恩節在十一月。" },
-                { id: "u5-s3", sentence: "Sunday is the first day of the week.", sentence_ch: "星期日是一週的第一天。" },
-                { id: "u5-s4", sentence: "People can have a day off on Thanksgiving in the USA.", sentence_ch: "在美國，人們可以在感恩節放假一天。" },
-                { id: "u5-s5", sentence: "Basketball is important to Jesse.", sentence_ch: "籃球對 Jesse 來說很重要。" },
-                { id: "u5-s6", sentence: "Christmas is my favorite holiday.", sentence_ch: "聖誕節是我最喜歡的節日。" },
-                { id: "u5-s7", sentence: "When is their meet-and-greet?", sentence_ch: "他們的見面會是什麼時候？" },
-                { id: "u5-s8", sentence: "The fourth class today is English.", sentence_ch: "今天的第四堂課是英文。" },
-                { id: "u5-s9", sentence: "Tomorrow is my birthday.", sentence_ch: "明天是我的生日。" },
-                { id: "u5-s10", sentence: "Ted is my cousin, and he's also my classmate.", sentence_ch: "Ted 是我的表親，而且他也是我的同班同學。" },
-                
-                // 11-20
-                { id: "u5-s11", sentence: "Let's play a game before dinner.", sentence_ch: "晚餐前我們來玩個遊戲吧。" },
-                { id: "u5-s12", sentence: "Are there many houses around the park?", sentence_ch: "公園附近有很多房子嗎？" },
-                { id: "u5-s13", sentence: "I am a fan of K-pop, too.", sentence_ch: "我也是 K-pop 的粉絲。" },
-                { id: "u5-s14", sentence: "Rose is Mr. Bean's second daughter.", sentence_ch: "Rose 是豆豆先生的二女兒。" },
-                { id: "u5-s15", sentence: "Christmas Eve is next week.", sentence_ch: "聖誕夜在下週。" },
-                { id: "u5-s16", sentence: "My sister is seven months old.", sentence_ch: "我的妹妹七個月大。" },
-                { id: "u5-s17", sentence: "January is the first month of the year.", sentence_ch: "一月是一年的第一個月。" },
-                { id: "u5-s18", sentence: "The holiday is in February.", sentence_ch: "那個節日在二月。" },
-                { id: "u5-s19", sentence: "The baseball game is on March fifteenth.", sentence_ch: "棒球比賽在三月十五日。" },
-                { id: "u5-s20", sentence: "April is between March and May.", sentence_ch: "四月在三月和五月之間。" },
-                
-                // 21-30
-                { id: "u5-s21", sentence: "Mother's Day is on the second Sunday of May.", sentence_ch: "母親節在五月的第二個星期日。" },
-                { id: "u5-s22", sentence: "June first is on Saturday this year.", sentence_ch: "今年的六月一日是星期六。" },
-                { id: "u5-s23", sentence: "July fourth is a very important day in the USA.", sentence_ch: "七月四日是美國非常重要的日子。" },
-                { id: "u5-s24", sentence: "Father's Day in Taiwan is on August eighth.", sentence_ch: "台灣的父親節在八月八日。" },
-                { id: "u5-s25", sentence: "September twenty-eighth is Confucius' birthday.", sentence_ch: "九月二十八日是孔子誕辰。" },
-                { id: "u5-s26", sentence: "October is after September.", sentence_ch: "十月在九月之後。" },
-                { id: "u5-s27", sentence: "Next December I'm going to the USA with my friends.", sentence_ch: "明年十二月我要和朋友去美國。" },
-                { id: "u5-s28", sentence: "New Year's Eve is on December 31.", sentence_ch: "跨年夜在12月31日。" },
-                { id: "u5-s29", sentence: "It's Christmas today.", sentence_ch: "今天是聖誕節。" },
-                { id: "u5-s30", sentence: "March is the third month of the year.", sentence_ch: "三月是一年的第三個月。" },
-                
-                // 31-36
-                { id: "u5-s31", sentence: "What's your favorite animal?", sentence_ch: "你最喜歡的動物是什麼？" },
-                { id: "u5-s32", sentence: "Don't touch the cow.", sentence_ch: "不要碰那頭牛。" },
-                { id: "u5-s33", sentence: "I'm thinking about Ma's Kitchen.", sentence_ch: "我在想馬媽媽廚房。" },
-                { id: "u5-s34", sentence: "Twelve is my lucky number.", sentence_ch: "12 是我的幸運數字。" },
-                { id: "u5-s35", sentence: "He is only a boy, not a man.", sentence_ch: "他只是一個男孩，不是男人。" },
-                { id: "u5-s36", sentence: "Sammy is having dinner with her family.", sentence_ch: "Sammy 正在和她的家人吃晚餐。" }
+        const generateOrdinalScramblePool = () => {
+            const templates = [
+                { s: "This is my [ORD] time.", ch: "這是我的第[NUM]次。" },
+                { s: "He won [ORD] prize.", ch: "他贏得了第[NUM]名。" },
+                { s: "Today is my [ORD] birthday.", ch: "今天是我的第[NUM]個生日。" },
+                { s: "The classroom is on the [ORD] floor.", ch: "教室在第[NUM]樓。" },
+            ];
+            const mapping = [
+                {w: "first", n: "一"}, {w: "second", n: "二"}, {w: "third", n: "三"}, {w: "fifth", n: "五"},
+                {w: "ninth", n: "九"}, {w: "twelfth", n: "十二"}, {w: "twentieth", n: "二十"}, {w: "twenty-first", n: "二十一"}
+            ];
+            
+            const pool = [];
+            for(let i=0; i<40; i++) {
+                const tIndex = i % templates.length;
+                const mIndex = Math.floor(Math.random() * mapping.length);
+                pool.push({
+                    id: `ord-sc-${i}`,
+                    sentence: templates[tIndex].s.replace("[ORD]", mapping[mIndex].w),
+                    sentence_ch: templates[tIndex].ch.replace("[NUM]", mapping[mIndex].n)
+                });
+            }
+            return pool;
+        };
+
+        // --- Unit 5 題庫生成 (更新為 現在進行式 / 時間) ---
+        const generateUnit5QuizPool = () => {
+            const pool = [
+                // 1. 介系詞 (in + 月份 / on + 日期)
+                { q: "My birthday is ______ May.", options: ["in", "on", "at"], ans: "in", hint: "月份前面用介系詞 in。" },
+                { q: "Christmas is ______ December.", options: ["in", "on", "at"], ans: "in", hint: "月份前面用介系詞 in。" },
+                { q: "Thanksgiving is ______ November.", options: ["in", "on", "at"], ans: "in", hint: "月份前面用介系詞 in。" },
+                { q: "School starts ______ September.", options: ["in", "on", "at"], ans: "in", hint: "月份前面用介系詞 in。" },
+                { q: "Mother's Day is ______ May.", options: ["in", "on", "at"], ans: "in", hint: "月份前面用介系詞 in。" },
+                { q: "The party is ______ Sunday.", options: ["on", "in", "at"], ans: "on", hint: "星期前面用介系詞 on。" },
+                { q: "It is ______ January 1st.", options: ["on", "in", "at"], ans: "on", hint: "具體日期(幾月幾號)前面用介系詞 on。" },
+                { q: "My birthday is ______ July 4th.", options: ["on", "in", "at"], ans: "on", hint: "具體日期前面用介系詞 on。" },
+                { q: "We have a test ______ Monday.", options: ["on", "in", "at"], ans: "on", hint: "星期前面用介系詞 on。" },
+                { q: "New Year's Day is ______ January 1st.", options: ["on", "in", "at"], ans: "on", hint: "特定節日日期用 on。" },
+                { q: "Valentine's Day is ______ February 14th.", options: ["on", "in", "at"], ans: "on", hint: "具體日期用 on。" },
+                { q: "Halloween is ______ October 31st.", options: ["on", "in", "at"], ans: "on", hint: "具體日期用 on。" },
+                { q: "Teacher's Day is ______ September.", options: ["in", "on", "at"], ans: "in", hint: "只有月份用 in。" },
+                { q: "The game is ______ Friday night.", options: ["on", "in", "at"], ans: "on", hint: "特定某一天的時段用 on。" },
+                { q: "Let's meet ______ noon.", options: ["at", "in", "on"], ans: "at", hint: "noon (中午) 使用 at。" },
+
+                // 2. 疑問詞 (When vs What time vs What date)
+                { q: "______ is your birthday?", options: ["When", "What time", "Who"], ans: "When", hint: "詢問「什麼時候」用 When。" },
+                { q: "______ is the date today?", options: ["What", "When", "How"], ans: "What", hint: "詢問日期用 What is the date...?" },
+                { q: "______ is Thanksgiving?", options: ["When", "What", "Who"], ans: "When", hint: "詢問節日在何時用 When。" },
+                { q: "______ day is it today?", options: ["What", "When", "How"], ans: "What", hint: "詢問星期幾用 What day...?" },
+                { q: "______ month is it?", options: ["What", "When", "Who"], ans: "What", hint: "詢問月份用 What month...?" },
+                { q: "______ is the school fair?", options: ["When", "What", "Where"], ans: "When", hint: "詢問活動時間用 When。" },
+                { q: "______ do you get up?", options: ["What time", "What date", "When date"], ans: "What time", hint: "詢問幾點鐘用 What time。" },
+                { q: "______ is Christmas?", options: ["When", "What time", "How"], ans: "When", hint: "詢問節日用 When。" },
+                { q: "______ is the second month?", options: ["What", "When", "Who"], ans: "What", hint: "問「是什麼」用 What。" },
+                { q: "______ are you going?", options: ["Where", "What", "When"], ans: "Where", hint: "問地點用 Where (雖然這課教時間，但這句是常見混淆題)。" },
+
+                // 3. 序數與日期拼寫 (Spelling & Usage)
+                { q: "It is August ______.", options: ["first", "one", "onest"], ans: "first", hint: "日期要用序數 (first)。" },
+                { q: "Today is May ______.", options: ["second", "two", "twond"], ans: "second", hint: "日期要用序數 (second)。" },
+                { q: "March ______ is my birthday.", options: ["third", "three", "threeth"], ans: "third", hint: "日期要用序數 (third)。" },
+                { q: "It is the ______ of April.", options: ["fourth", "four", "fourst"], ans: "fourth", hint: "日期要用序數 (fourth)。" },
+                { q: "Today is June ______.", options: ["fifth", "five", "fiveth"], ans: "fifth", hint: "Five 的序數是 Fifth (ve變f)。" },
+                { q: "It is the ______ day of the week.", options: ["first", "one", "once"], ans: "first", hint: "第一天用 first。" },
+                { q: "She is the ______ student.", options: ["ninth", "nine", "nineth"], ans: "ninth", hint: "Nine 的序數是 Ninth (去e)。" },
+                { q: "It is November ______.", options: ["twelfth", "twelve", "twelveth"], ans: "twelfth", hint: "Twelve 的序數是 Twelfth (ve變f)。" },
+                { q: "Today is the ______.", options: ["twentieth", "twenty", "twentyth"], ans: "twentieth", hint: "Twenty 的序數是 Twentieth (y變ieth)。" },
+                { q: "His birthday is on July ______.", options: ["21st", "21th", "21nd"], ans: "21st", hint: "21的尾數是1，縮寫用 st。" },
+                { q: "It's on the ______ of December.", options: ["22nd", "22th", "22st"], ans: "22nd", hint: "22的尾數是2，縮寫用 nd。" },
+                { q: "Today is August ______.", options: ["31st", "31th", "31rd"], ans: "31st", hint: "31的尾數是1，縮寫用 st。" },
+                { q: "It is the ______ month of the year.", options: ["last", "end", "finish"], ans: "last", hint: "最後一個月是 last month。" },
+                { q: "January is the ______ month.", options: ["1st", "1nd", "1th"], ans: "1st", hint: "第一是 1st。" },
+                { q: "February is the ______ month.", options: ["2nd", "2st", "2th"], ans: "2nd", hint: "第二是 2nd。" },
+
+                // 4. 月份與常識 (Context)
+                { q: "______ comes after January.", options: ["February", "March", "December"], ans: "February", hint: "一月之後是二月。" },
+                { q: "______ comes before May.", options: ["April", "June", "March"], ans: "April", hint: "五月之前是四月。" },
+                { q: "Thanksgiving is in ______.", options: ["November", "December", "January"], ans: "November", hint: "感恩節在十一月。" },
+                { q: "Christmas is in ______.", options: ["December", "November", "October"], ans: "December", hint: "聖誕節在十二月。" },
+                { q: "New Year's Eve is on ______ 31st.", options: ["December", "January", "November"], ans: "December", hint: "除夕是 12 月 31 日。" },
+                { q: "Mother's Day is in ______.", options: ["May", "April", "June"], ans: "May", hint: "母親節在五月。" },
+                { q: "Father's Day in Taiwan is in ______.", options: ["August", "July", "June"], ans: "August", hint: "台灣父親節在八月 (8/8)。" },
+                { q: "Halloween is in ______.", options: ["October", "November", "September"], ans: "October", hint: "萬聖節在十月。" },
+                { q: "The ______ month is October.", options: ["tenth", "ten", "ninth"], ans: "tenth", hint: "十月是第十個月。" },
+                { q: "There are ______ months in a year.", options: ["twelve", "twelfth", "twenty"], ans: "twelve", hint: "數量用基數，一年有12個月。" }
             ];
             return shuffleArray(pool);
         };
 
-        // --- Unit 6 題庫生成 ---
+        // --- Unit 5 文法重組生成器 (更新為 Dates / Holidays) ---
+        const generateUnit5GrammarScramblePool = () => {
+            const sentences = [
+                // 詢問日期與時間
+                { sentence: "What is the date today?", sentence_ch: "今天是幾號？" },
+                { sentence: "When is your birthday?", sentence_ch: "你的生日是什麼時候？" },
+                { sentence: "What day is it today?", sentence_ch: "今天是星期幾？" },
+                { sentence: "When is the school fair?", sentence_ch: "園遊會是什麼時候？" },
+                { sentence: "What time is the party?", sentence_ch: "派對是幾點？" },
+                { sentence: "When is Thanksgiving?", sentence_ch: "感恩節是什麼時候？" },
+                { sentence: "When is Mother's Day?", sentence_ch: "母親節是什麼時候？" },
+                { sentence: "What time is it now?", sentence_ch: "現在幾點了？" },
+                { sentence: "When does the movie start?", sentence_ch: "電影什麼時候開始？" },
+                { sentence: "Is today a holiday?", sentence_ch: "今天是假日嗎？" },
+
+                // 介系詞用法 (in + 月份)
+                { sentence: "My birthday is in November.", sentence_ch: "我的生日在十一月。" },
+                { sentence: "Christmas is in December.", sentence_ch: "聖誕節在十二月。" },
+                { sentence: "Thanksgiving is in November.", sentence_ch: "感恩節在十一月。" },
+                { sentence: "School starts in September.", sentence_ch: "學校在九月開學。" },
+                { sentence: "Valentine's Day is in February.", sentence_ch: "情人節在二月。" },
+                { sentence: "Halloween is in October.", sentence_ch: "萬聖節在十月。" },
+                { sentence: "Father's Day is in August.", sentence_ch: "父親節在八月。" },
+                { sentence: "It is hot in July.", sentence_ch: "七月很熱。" },
+                { sentence: "Flowers bloom in March.", sentence_ch: "花在三月盛開。" },
+                { sentence: "We go swimming in August.", sentence_ch: "我們在八月去游泳。" },
+
+                // 介系詞用法 (on + 日期/星期)
+                { sentence: "It is on May fifth.", sentence_ch: "它在五月五號。" },
+                { sentence: "The party is on Sunday.", sentence_ch: "派對在星期日。" },
+                { sentence: "We have a test on Monday.", sentence_ch: "我們星期一有考試。" },
+                { sentence: "New Year's Day is on January first.", sentence_ch: "元旦在1月1日。" },
+                { sentence: "Her birthday is on April second.", sentence_ch: "她的生日在4月2日。" },
+                { sentence: "Let's meet on Friday.", sentence_ch: "我們星期五見面吧。" },
+                { sentence: "The concert is on July fourth.", sentence_ch: "音樂會在7月4日。" },
+                { sentence: "We watch fireworks on New Year's Eve.", sentence_ch: "我們在跨年夜看煙火。" },
+                { sentence: "See you on Wednesday.", sentence_ch: "星期三見。" },
+                { sentence: "He was born on October tenth.", sentence_ch: "他出生在10月10日。" },
+
+                // 序數 (Ordinals) 與排名
+                { sentence: "January is the first month.", sentence_ch: "一月是第一個月。" },
+                { sentence: "He is the fourth student.", sentence_ch: "他是第四個學生。" },
+                { sentence: "The third car is red.", sentence_ch: "第三輛車是紅色的。" },
+                { sentence: "She won the first prize.", sentence_ch: "她贏得了第一名。" },
+                { sentence: "This is my second time here.", sentence_ch: "這是我第二次來這裡。" },
+                { sentence: "The twelfth month is December.", sentence_ch: "第十二個月是十二月。" },
+                { sentence: "It is the ninth day of June.", sentence_ch: "這是六月的第九天。" },
+                { sentence: "I live on the second floor.", sentence_ch: "我住在二樓。" },
+                { sentence: "Who is the first person?", sentence_ch: "誰是第一個人？" },
+                { sentence: "Today is my twentieth birthday.", sentence_ch: "今天是我的二十歲生日。" },
+
+                // 其他相關句型
+                { sentence: "Thanksgiving is an important holiday.", sentence_ch: "感恩節是一個重要的節日。" },
+                { sentence: "We eat turkey on Thanksgiving.", sentence_ch: "我們在感恩節吃火雞。" },
+                { sentence: "There are twelve months in a year.", sentence_ch: "一年有十二個月。" },
+                { sentence: "My favorite holiday is Christmas.", sentence_ch: "我最喜歡的節日是聖誕節。" },
+                { sentence: "April comes before May.", sentence_ch: "四月在五月之前。" },
+                { sentence: "September comes after August.", sentence_ch: "九月在八月之後。" },
+                { sentence: "My lucky number is seven.", sentence_ch: "我的幸運數字是七。" },
+                { sentence: "Please come on time.", sentence_ch: "請準時來。" },
+                { sentence: "It is time for dinner.", sentence_ch: "晚餐時間到了。" },
+                { sentence: "Have a nice holiday.", sentence_ch: "祝你有個美好的假期。" }
+            ];
+            return sentences.map((item, index) => ({
+                id: `u5-g-sc-${index}`,
+                sentence: item.sentence,
+                sentence_ch: item.sentence_ch
+            }));
+        };
+
+        // --- Unit 6 題庫生成 (更新為 There is / There are) ---
         const generateUnit6QuizPool = () => {
             const pool = [
+                // 1. There is (單數/不可數) - 15題
                 { q: "There ______ a book on the desk.", options: ["is", "are", "am"], ans: "is", hint: "a book 是單數，用 is。" },
-                { q: "There ______ three cats under the tree.", options: ["are", "is", "am"], ans: "are", hint: "three cats 是複數，用 are。" },
-                { q: "______ there any milk in the fridge?", options: ["Is", "Are", "Do"], ans: "Is", hint: "milk 是不可數名詞，視為單數，用 Is。" },
-                { q: "There ______ not any students in the classroom.", options: ["are", "is", "do"], ans: "are", hint: "students 是複數，用 are。" },
-                { q: "Is there a dog? No, there ______.", options: ["isn't", "aren't", "not"], ans: "isn't", hint: "No, there isn't." },
-                { q: "______ there many cars on the street?", options: ["Are", "Is", "Do"], ans: "Are", hint: "cars 是複數，用 Are。" },
-                { q: "There ______ an apple on the table.", options: ["is", "are", "be"], ans: "is", hint: "an apple 是單數，用 is。" },
-                { q: "______ there a tiger over there?", options: ["Is", "Are", "Am"], ans: "Is", hint: "a tiger 是單數，用 Is。" },
-                { q: "No, there ______ not any water.", options: ["is", "are", "am"], ans: "is", hint: "water 是不可數名詞，用 is。" },
-                { q: "There ______ two birds singing.", options: ["are", "is", "be"], ans: "are", hint: "two birds 是複數，用 are。" },
-                { q: "There is ______ elephant in the zoo.", options: ["an", "a", "two"], ans: "an", hint: "elephant 母音開頭用 an，且 is 搭配單數。" },
-                { q: "Are there ______ zebras?", options: ["any", "some", "a"], ans: "any", hint: "疑問句通常用 any。" },
-                { q: "There are ______ lions.", options: ["some", "any", "a"], ans: "some", hint: "肯定句通常用 some。" },
-                { q: "There isn't ______ food here.", options: ["any", "some", "a"], ans: "any", hint: "否定句通常用 any。" },
-                { q: "Look! There ______ a monkey.", options: ["is", "are", "be"], ans: "is", hint: "a monkey 是單數。" },
-                { q: "The ______ is the king of animals.", options: ["lion", "tiger", "cat"], ans: "lion", hint: "獅子是萬獸之王。" },
-                { q: "I am hungry, ______ I eat food.", options: ["so", "but", "because"], ans: "so", hint: "因果關係：所以。" },
-                { q: "Please come ______ home early.", options: ["back", "go", "to"], ans: "back", hint: "Come back (回來)。" },
-                { q: "Can you ______ me?", options: ["help", "helps", "helping"], ans: "help", hint: "Can 後面接原形動詞。" },
-                { q: "Vegetables are ______.", options: ["healthy", "health", "heavy"], ans: "healthy", hint: "蔬菜是健康的。" }
+                { q: "There ______ one lion in the zoo.", options: ["is", "are", "be"], ans: "is", hint: "one lion 是單數，用 is。" },
+                { q: "There ______ an elephant.", options: ["is", "are", "have"], ans: "is", hint: "an elephant 是單數，用 is。" },
+                { q: "There ______ a bird in the tree.", options: ["is", "are", "do"], ans: "is", hint: "a bird 是單數，用 is。" },
+                { q: "There ______ no water.", options: ["is", "are", "have"], ans: "is", hint: "water 是不可數名詞，視為單數，用 is。" },
+                { q: "There ______ some milk on the table.", options: ["is", "are", "has"], ans: "is", hint: "milk 是不可數名詞，用 is。" },
+                { q: "______ there a king?", options: ["Is", "Are", "Do"], ans: "Is", hint: "a king 是單數，問句用 Is 開頭。" },
+                { q: "______ there any food?", options: ["Is", "Are", "Do"], ans: "Is", hint: "food 不可數，用 Is。" },
+                { q: "There is ______ ant.", options: ["an", "a", "two"], ans: "an", hint: "ant 是母音開頭單數，用 an。" },
+                { q: "There is ______ big bear.", options: ["a", "an", "two"], ans: "a", hint: "big 是子音開頭，用 a。" },
+                { q: "There ______ not a tiger.", options: ["is", "are", "do"], ans: "is", hint: "a tiger 是單數。" },
+                { q: "Is ______ a monkey?", options: ["there", "this", "that"], ans: "there", hint: "Is there...? (有...嗎？)" },
+                { q: "There is ______ money.", options: ["no", "not", "any"], ans: "no", hint: "There is no + 名詞 (沒有...)。" },
+                { q: "There is ______ rice in the bowl.", options: ["some", "a", "many"], ans: "some", hint: "rice 不可數，可用 some，不可用 a/many。" },
+                { q: "There ______ a fox over there.", options: ["is", "are", "am"], ans: "is", hint: "a fox 單數。" },
+
+                // 2. There are (複數) - 15題
+                { q: "There ______ two cats.", options: ["are", "is", "am"], ans: "are", hint: "two cats 是複數，用 are。" },
+                { q: "There ______ many people.", options: ["are", "is", "have"], ans: "are", hint: "many people 是複數，用 are。" },
+                { q: "There ______ some eggs.", options: ["are", "is", "do"], ans: "are", hint: "eggs 是複數，用 are。" },
+                { q: "______ there any birds?", options: ["Are", "Is", "Do"], ans: "Are", hint: "birds 是複數，問句用 Are。" },
+                { q: "There are ______ zebras.", options: ["three", "one", "a"], ans: "three", hint: "are 後面接複數 (three)。" },
+                { q: "There are ______ bugs.", options: ["many", "a", "one"], ans: "many", hint: "are 後面接複數修飾語 many。" },
+                { q: "There are two ______.", options: ["foxes", "fox", "fox's"], ans: "foxes", hint: "two 後面接複數，fox 的複數是 foxes。" },
+                { q: "There are five ______.", options: ["monkeys", "monkey", "monkies"], ans: "monkeys", hint: "monkey 的複數直接加s (母音+y)。" },
+                { q: "There are ten ______.", options: ["boxes", "box", "boxs"], ans: "boxes", hint: "box 的複數加 es。" },
+                { q: "There are ______ apples.", options: ["some", "a", "an"], ans: "some", hint: "apples 複數可用 some。" },
+                { q: "______ there two dogs?", options: ["Are", "Is", "Do"], ans: "Are", hint: "two dogs 複數。" },
+                { q: "There ______ not any pigs.", options: ["are", "is", "have"], ans: "are", hint: "pigs 複數。" },
+                { q: "There are ______ students in the classroom.", options: ["twenty", "one", "a"], ans: "twenty", hint: "are 後接複數。" },
+                { q: "There are ______ nice cars.", options: ["some", "a", "one"], ans: "some", hint: "cars 複數。" },
+                { q: "There are ______ animals in the zoo.", options: ["many", "much", "one"], ans: "many", hint: "animals 可數複數用 many。" },
+
+                // 3. 回答 (Short Answers) - 10題
+                { q: "Is there a dog? Yes, there ______.", options: ["is", "are", "does"], ans: "is", hint: "Is there...? 回答用 Yes, there is。" },
+                { q: "Are there any cats? Yes, there ______.", options: ["are", "is", "do"], ans: "are", hint: "Are there...? 回答用 Yes, there are。" },
+                { q: "Is there a book? No, there ______.", options: ["isn't", "aren't", "don't"], ans: "isn't", hint: "No, there isn't." },
+                { q: "Are there any bugs? No, there ______.", options: ["aren't", "isn't", "don't"], ans: "aren't", hint: "No, there aren't." },
+                { q: "Is there an apple? Yes, ______ is.", options: ["there", "it", "this"], ans: "there", hint: "Yes, there is." },
+                { q: "Are there any boys? Yes, ______ are.", options: ["there", "they", "those"], ans: "there", hint: "Yes, there are." },
+                { q: "Is there any water? No, there ______.", options: ["isn't", "aren't", "not"], ans: "isn't", hint: "water 不可數，用 isn't。" },
+                { q: "Are there many cars? No, there ______.", options: ["aren't", "isn't", "don't"], ans: "aren't", hint: "cars 複數，用 aren't。" },
+                { q: "Is there a lion? ______.", options: ["Yes, there is.", "Yes, it is.", "Yes, there does."], ans: "Yes, there is.", hint: "Is there 開頭問，There is 回答。" },
+                { q: "Are there any birds? ______.", options: ["No, there aren't.", "No, they aren't.", "No, there don't."], ans: "No, there aren't.", hint: "Are there 開頭問，There aren't 回答。" },
+
+                // 4. some / any 用法 - 10題
+                { q: "There are ______ bananas.", options: ["some", "any", "a"], ans: "some", hint: "肯定句用 some。" },
+                { q: "There aren't ______ bananas.", options: ["any", "some", "a"], ans: "any", hint: "否定句用 any。" },
+                { q: "Are there ______ bananas?", options: ["any", "some", "a"], ans: "any", hint: "疑問句用 any。" },
+                { q: "There is ______ water.", options: ["some", "any", "a"], ans: "some", hint: "不可數肯定句用 some。" },
+                { q: "Is there ______ water?", options: ["any", "some", "a"], ans: "any", hint: "疑問句用 any。" },
+                { q: "There isn't ______ food.", options: ["any", "some", "a"], ans: "any", hint: "否定句用 any。" },
+                { q: "There are ______ beautiful flowers.", options: ["some", "any", "one"], ans: "some", hint: "肯定句用 some。" },
+                { q: "Do you have ______ questions?", options: ["any", "some", "a"], ans: "any", hint: "疑問句用 any。" },
+                { q: "There are ______ birds.", options: ["no", "not", "any"], ans: "no", hint: "There are no + 複數 (沒有...)。" },
+                { q: "Are there ______ tigers in the zoo?", options: ["any", "some", "one"], ans: "any", hint: "疑問句用 any。" }
             ];
             return shuffleArray(pool);
         };
 
-        // --- Unit 6 重組生成器 ---
-        const generateUnit6ScramblePool = () => {
-            const pool = [
-                // 1-10
-                { id: "u6-s1", sentence: "Is there a lion under the tree?", sentence_ch: "樹下有一隻獅子嗎？" },
-                { id: "u6-s2", sentence: "The woman over there is a cook.", sentence_ch: "那邊的那位女士是一位廚師。" },
-                { id: "u6-s3", sentence: "The beautiful house is for the king.", sentence_ch: "這間漂亮的房子是給國王的。" },
-                { id: "u6-s4", sentence: "There are some comic books on the desk.", sentence_ch: "書桌上有一些漫畫書。" },
-                { id: "u6-s5", sentence: "There's an elephant in front of the bus.", sentence_ch: "公車前面有一隻大象。" },
-                { id: "u6-s6", sentence: "Uncle Peter's farm is so big.", sentence_ch: "彼得叔叔的農場好大。" },
-                { id: "u6-s7", sentence: "There aren't any chairs in the classroom.", sentence_ch: "教室裡沒有任何椅子。" },
-                { id: "u6-s8", sentence: "Lions and tigers are big cats.", sentence_ch: "獅子和老虎是大貓。" },
-                { id: "u6-s9", sentence: "There are no zebras near here.", sentence_ch: "這附近沒有斑馬。" },
-                { id: "u6-s10", sentence: "Is that a bird on the dog's back?", sentence_ch: "那隻狗的背上是一隻鳥嗎？" },
+        // --- Unit 6 文法重組生成器 (更新為 There is/are) ---
+        const generateUnit6GrammarScramblePool = () => {
+            const sentences = [
+                // There is (單數)
+                { sentence: "There is a book on the desk.", sentence_ch: "書桌上有一本書。" },
+                { sentence: "There is an elephant in the zoo.", sentence_ch: "動物園裡有一頭大象。" },
+                { sentence: "There is a bird on the roof.", sentence_ch: "屋頂上有一隻鳥。" },
+                { sentence: "There is a big bear in the cave.", sentence_ch: "洞穴裡有一隻大熊。" },
+                { sentence: "There is a computer on my desk.", sentence_ch: "我的桌上有一台電腦。" },
+                { sentence: "There is a gift for you.", sentence_ch: "有一份禮物要送給你。" },
+                { sentence: "There is a clean river.", sentence_ch: "有一條乾淨的河流。" },
+                { sentence: "There is a fox behind the tree.", sentence_ch: "樹後面有一隻狐狸。" },
+                { sentence: "There is only one way.", sentence_ch: "只有一條路。" },
+                { sentence: "There is a bus stop near here.", sentence_ch: "這附近有一個公車站。" },
 
-                // 11-20
-                { id: "u6-s11", sentence: "The watch is a great help to me.", sentence_ch: "這手錶對我幫忙很大。" },
-                { id: "u6-s12", sentence: "That's right to help people.", sentence_ch: "幫助別人是對的。" },
-                { id: "u6-s13", sentence: "There are three monkeys in the tree.", sentence_ch: "樹上有三隻猴子。" },
-                { id: "u6-s14", sentence: "Are there two foxes over there?", sentence_ch: "那邊有兩隻狐狸嗎？" },
-                { id: "u6-s15", sentence: "This horse is very old.", sentence_ch: "這匹馬很老了。" },
-                { id: "u6-s16", sentence: "There is a big rat in the kitchen.", sentence_ch: "廚房裡有一隻大老鼠。" },
-                { id: "u6-s17", sentence: "Are there any bears in Africa?", sentence_ch: "非洲有任何熊嗎？" },
-                { id: "u6-s18", sentence: "The lion is the king of the animal world.", sentence_ch: "獅子是動物世界的國王。" },
-                { id: "u6-s19", sentence: "The Lins are a great example of a happy family.", sentence_ch: "林家人是快樂家庭的好榜樣。" },
-                { id: "u6-s20", sentence: "Look! There is a bug in the pencil box.", sentence_ch: "看！鉛筆盒裡有一隻蟲子。" },
+                // There is (不可數)
+                { sentence: "There is some milk in the glass.", sentence_ch: "杯子裡有一些牛奶。" },
+                { sentence: "There is no time.", sentence_ch: "沒有時間了。" },
+                { sentence: "There is a lot of rain.", sentence_ch: "雨下得很大。" },
+                { sentence: "There is some water on the floor.", sentence_ch: "地板上有一些水。" },
+                { sentence: "There is good news.", sentence_ch: "有好消息。" },
 
-                // 21-26
-                { id: "u6-s21", sentence: "I'm hungry. Let's eat some food.", sentence_ch: "我餓了。我們吃點食物吧。" },
-                { id: "u6-s22", sentence: "Tom is cleaning up his room.", sentence_ch: "湯姆正在打掃他的房間。" },
-                { id: "u6-s23", sentence: "Are you hungry?", sentence_ch: "你餓嗎？" },
-                { id: "u6-s24", sentence: "No. I'm full.", sentence_ch: "不。我飽了。" },
-                { id: "u6-s25", sentence: "Mary's daughter is a healthy girl.", sentence_ch: "瑪麗的女兒是個健康的女孩。" },
-                { id: "u6-s26", sentence: "Thanks to Mom, we can have a great dinner.", sentence_ch: "多虧了媽媽，我們可以享用一頓很棒的晚餐。" },
-                { id: "u6-s27", sentence: "Their house is very clean.", sentence_ch: "他們的房子很乾淨。" }
+                // There are (複數)
+                { sentence: "There are two cats.", sentence_ch: "有兩隻貓。" },
+                { sentence: "There are some monkeys in the tree.", sentence_ch: "樹上有一些猴子。" },
+                { sentence: "There are many people here.", sentence_ch: "這裡有很多人。" },
+                { sentence: "There are five zebras.", sentence_ch: "有五隻斑馬。" },
+                { sentence: "There are some flowers in the garden.", sentence_ch: "花園裡有一些花。" },
+                { sentence: "There are three pigs.", sentence_ch: "有三隻豬。" },
+                { sentence: "There are some eggs in the box.", sentence_ch: "盒子裡有一些雞蛋。" },
+                { sentence: "There are seven days in a week.", sentence_ch: "一週有七天。" },
+                { sentence: "There are some beautiful pictures.", sentence_ch: "有一些漂亮的圖片。" },
+                { sentence: "There are two bathrooms in my house.", sentence_ch: "我家有兩間浴室。" },
+                { sentence: "There are some tall trees.", sentence_ch: "有一些很高的樹。" },
+                { sentence: "There are no secrets.", sentence_ch: "沒有秘密。" },
+
+                // 否定句 (There isn't / There aren't)
+                { sentence: "There isn't a pen.", sentence_ch: "這裡沒有筆。" },
+                { sentence: "There aren't any apples.", sentence_ch: "這裡沒有任何蘋果。" },
+                { sentence: "There isn't any water here.", sentence_ch: "這裡沒有水。" },
+                { sentence: "There aren't any students in the room.", sentence_ch: "房間裡沒有學生。" },
+                { sentence: "There isn't any food left.", sentence_ch: "沒有剩下的食物了。" },
+                { sentence: "There isn't a cloud in the sky.", sentence_ch: "天空中一片雲也沒有。" },
+                { sentence: "There aren't any cookies.", sentence_ch: "沒有任何餅乾。" },
+                { sentence: "There isn't any money in my wallet.", sentence_ch: "我的錢包裡沒有錢。" },
+                { sentence: "There aren't any lights.", sentence_ch: "沒有任何燈光。" },
+                { sentence: "No, there aren't.", sentence_ch: "不，沒有。" },
+
+                // 疑問句 (Is there / Are there)
+                { sentence: "Is there a dog?", sentence_ch: "有一隻狗嗎？" },
+                { sentence: "Are there any birds?", sentence_ch: "有任何鳥嗎？" },
+                { sentence: "Is there a king in the castle?", sentence_ch: "城堡裡有國王嗎？" },
+                { sentence: "Are there any bugs?", sentence_ch: "有任何蟲子嗎？" },
+                { sentence: "Is there any water?", sentence_ch: "有水嗎？" },
+                { sentence: "Are there any questions?", sentence_ch: "有任何問題嗎？" },
+                { sentence: "Is there an orange on the table?", sentence_ch: "桌上有一顆柳橙嗎？" },
+                { sentence: "Are there many cars on the road?", sentence_ch: "路上的車多嗎？" },
+                { sentence: "Are there any problems?", sentence_ch: "有任何問題嗎？" },
+                { sentence: "Is there any ice cream?", sentence_ch: "有冰淇淋嗎？" },
+                { sentence: "Are there any chairs?", sentence_ch: "有椅子嗎？" },
+                { sentence: "Are there any games to play?", sentence_ch: "有遊戲可以玩嗎？" },
+                { sentence: "Yes, there is.", sentence_ch: "是的，有。" }
             ];
-            return shuffleArray(pool);
+            return sentences.map((item, index) => ({
+                id: `u6-g-sc-${index}`,
+                sentence: item.sentence,
+                sentence_ch: item.sentence_ch
+            }));
         };
 
-        // --- 資料庫 ---
+        // --- Unit 5 單字資料 (UPDATED: Dates & Holidays) ---
+        const unit5VocabData = [
+            { id: "u5-1", word: "date", part: "n.", chinese: "日期", sentence: "What is the date today?", sentence_ch: "今天是幾號？" },
+            { id: "u5-2", word: "November", part: "n.", chinese: "十一月", sentence: "My birthday is in November.", sentence_ch: "我的生日在十一月。" },
+            { id: "u5-3", word: "first", part: "adj./adv.", chinese: "第一", sentence: "She won the first prize.", sentence_ch: "她贏得了第一名。" },
+            { id: "u5-4", word: "Thanksgiving", part: "n.", chinese: "感恩節", sentence: "We eat turkey on Thanksgiving.", sentence_ch: "我們在感恩節吃火雞。" },
+            { id: "u5-5", word: "important", part: "adj.", chinese: "重要的", sentence: "Family is very important to me.", sentence_ch: "家人對我來說很重要。" },
+            { id: "u5-6", word: "holiday", part: "n.", chinese: "節日", sentence: "Christmas is a happy holiday.", sentence_ch: "聖誕節是一個快樂的節日。" },
+            { id: "u5-7", word: "when", part: "adv.", chinese: "何時", sentence: "When is your birthday?", sentence_ch: "你的生日是什麼時候？" },
+            { id: "u5-8", word: "fourth", part: "adj.", chinese: "第四", sentence: "He is the fourth student in line.", sentence_ch: "他是排隊的第四個學生。" },
+            { id: "u5-9", word: "birthday", part: "n.", chinese: "生日", sentence: "Happy birthday to you!", sentence_ch: "祝你生日快樂！" },
+            { id: "u5-10", word: "also", part: "adv.", chinese: "也", sentence: "I like apples, and I also like bananas.", sentence_ch: "我喜歡蘋果，我也喜歡香蕉。" },
+            { id: "u5-11", word: "before", part: "prep.", chinese: "在...之前", sentence: "Please wash your hands before dinner.", sentence_ch: "晚餐前請洗手。" },
+            { id: "u5-12", word: "around", part: "prep.", chinese: "大約; 在...周圍", sentence: "Let's meet around five o'clock.", sentence_ch: "我們大約五點見面。" },
+            { id: "u5-13", word: "How about...?", part: "phr.", chinese: "...怎麼樣？", sentence: "I like red. How about you?", sentence_ch: "我喜歡紅色。你呢？" },
+            { id: "u5-14", word: "second", part: "adj.", chinese: "第二", sentence: "This is my second time here.", sentence_ch: "這是第二次來這裡。" },
+            { id: "u5-15", word: "next", part: "adj.", chinese: "下一個", sentence: "Who is the next person?", sentence_ch: "下一個人是誰？" },
+            { id: "u5-16", word: "month", part: "n.", chinese: "月份", sentence: "There are twelve months in a year.", sentence_ch: "一年有十二個月。" },
+            { id: "u5-17", word: "January", part: "n.", chinese: "一月", sentence: "January is the first month of the year.", sentence_ch: "一月是一年的第一個月。" },
+            { id: "u5-18", word: "February", part: "n.", chinese: "二月", sentence: "Valentine's Day is in February.", sentence_ch: "情人節在二月。" },
+            { id: "u5-19", word: "March", part: "n.", chinese: "三月", sentence: "Flowers bloom in March.", sentence_ch: "花在三月盛開。" },
+            { id: "u5-20", word: "April", part: "n.", chinese: "四月", sentence: "April often has rain.", sentence_ch: "四月常下雨。" },
+            { id: "u5-21", word: "May", part: "n.", chinese: "五月", sentence: "Mother's Day is in May.", sentence_ch: "母親節在五月。" },
+            { id: "u5-22", word: "June", part: "n.", chinese: "六月", sentence: "School ends in June.", sentence_ch: "學校在六月結束。" },
+            { id: "u5-23", word: "July", part: "n.", chinese: "七月", sentence: "It is hot in July.", sentence_ch: "七月很熱。" },
+            { id: "u5-24", word: "August", part: "n.", chinese: "八月", sentence: "We go swimming in August.", sentence_ch: "我們在八月去游泳。" },
+            { id: "u5-25", word: "September", part: "n.", chinese: "九月", sentence: "School starts in September.", sentence_ch: "學校在九月開學。" },
+            { id: "u5-26", word: "October", part: "n.", chinese: "十月", sentence: "Halloween is in October.", sentence_ch: "萬聖節在十月。" },
+            { id: "u5-27", word: "December", part: "n.", chinese: "十二月", sentence: "Christmas is in December.", sentence_ch: "聖誕節在十二月。" },
+            { id: "u5-28", word: "New Year's Eve", part: "n.", chinese: "跨年夜; 除夕", sentence: "We watch fireworks on New Year's Eve.", sentence_ch: "我們在跨年夜看煙火。" },
+            { id: "u5-29", word: "Christmas", part: "n.", chinese: "聖誕節", sentence: "We get gifts on Christmas.", sentence_ch: "我們在聖誕節收到禮物。" },
+            { id: "u5-30", word: "third", part: "adj.", chinese: "第三", sentence: "The third car is red.", sentence_ch: "第三輛車是紅色的。" },
+            { id: "u5-31", word: "animal", part: "n.", chinese: "動物", sentence: "A dog is an animal.", sentence_ch: "狗是一種動物。" },
+            { id: "u5-32", word: "cow", part: "n.", chinese: "母牛", sentence: "The cow gives us milk.", sentence_ch: "母牛給我們牛奶。" },
+            { id: "u5-33", word: "think", part: "v.", chinese: "認為; 想", sentence: "I think it will rain today.", sentence_ch: "我想今天會下雨。" },
+            { id: "u5-34", word: "lucky", part: "adj.", chinese: "幸運的", sentence: "You are a lucky boy.", sentence_ch: "你是一個幸運的男孩。" },
+            { id: "u5-35", word: "only", part: "adv.", chinese: "只有", sentence: "I have only one dollar.", sentence_ch: "我只有一塊錢。" },
+            { id: "u5-36", word: "dinner", part: "n.", chinese: "晚餐", sentence: "We have dinner at 7 p.m.", sentence_ch: "我們晚上七點吃晚餐。" }
+        ];
+
+        // --- 新增：Unit 6 單字資料 (UPDATED: Animals & Environment) ---
+        const unit6VocabData = [
+            { id: "u6-1", word: "lion", part: "n.", chinese: "獅子", sentence: "The lion is the king of animals.", sentence_ch: "獅子是萬獸之王。" },
+            { id: "u6-2", word: "over there", part: "phr.", chinese: "在那邊", sentence: "Look at the bird over there.", sentence_ch: "看那邊那隻鳥。" },
+            { id: "u6-3", word: "king", part: "n.", chinese: "國王", sentence: "The king lives in a big castle.", sentence_ch: "國王住在一座大城堡裡。" },
+            { id: "u6-4", word: "some", part: "adj./pron.", chinese: "一些", sentence: "I have some money in my pocket.", sentence_ch: "我的口袋裡有一些錢。" },
+            { id: "u6-5", word: "elephant", part: "n.", chinese: "大象", sentence: "The elephant has a long nose.", sentence_ch: "大象有一個長鼻子。" },
+            { id: "u6-6", word: "so", part: "conj./adv.", chinese: "所以; 非常", sentence: "It is so hot today.", sentence_ch: "今天非常熱。" },
+            { id: "u6-7", word: "any", part: "adj./pron.", chinese: "任何; 一些", sentence: "Do you have any questions?", sentence_ch: "你有任何問題嗎？" },
+            { id: "u6-8", word: "tiger", part: "n.", chinese: "老虎", sentence: "The tiger runs very fast.", sentence_ch: "老虎跑得很快。" },
+            { id: "u6-9", word: "zebra", part: "n.", chinese: "斑馬", sentence: "A zebra has black and white stripes.", sentence_ch: "斑馬有黑白條紋。" },
+            { id: "u6-10", word: "back", part: "n./adv.", chinese: "背部; 後面", sentence: "Please stand at the back of the line.", sentence_ch: "請排在隊伍的後面。" },
+            { id: "u6-11", word: "help", part: "v./n.", chinese: "幫忙", sentence: "Can you help me with my homework?", sentence_ch: "你可以幫我做功課嗎？" },
+            { id: "u6-12", word: "right", part: "adj./adv.", chinese: "正確的; 右邊", sentence: "That is the right answer.", sentence_ch: "那是正確的答案。" },
+            { id: "u6-13", word: "monkey", part: "n.", chinese: "猴子", sentence: "The monkey likes to eat bananas.", sentence_ch: "猴子喜歡吃香蕉。" },
+            { id: "u6-14", word: "fox", part: "n.", chinese: "狐狸", sentence: "The fox is a smart animal.", sentence_ch: "狐狸是一種聰明的動物。" },
+            { id: "u6-15", word: "horse", part: "n.", chinese: "馬", sentence: "I can ride a horse.", sentence_ch: "我會騎馬。" },
+            { id: "u6-16", word: "rat", part: "n.", chinese: "大老鼠", sentence: "I saw a big rat in the kitchen.", sentence_ch: "我在廚房看見一隻大老鼠。" },
+            { id: "u6-17", word: "bear", part: "n.", chinese: "熊", sentence: "The bear is sleeping in the cave.", sentence_ch: "熊正在洞穴裡睡覺。" },
+            { id: "u6-18", word: "world", part: "n.", chinese: "世界", sentence: "We live in a beautiful world.", sentence_ch: "我們住在一個美麗的世界。" },
+            { id: "u6-19", word: "example", part: "n.", chinese: "例子", sentence: "Can you give me an example?", sentence_ch: "你可以給我一個例子嗎？" },
+            { id: "u6-20", word: "bug", part: "n.", chinese: "蟲子", sentence: "There is a bug on the leaf.", sentence_ch: "葉子上有一隻蟲子。" },
+            { id: "u6-21", word: "food", part: "n.", chinese: "食物", sentence: "We need food and water to live.", sentence_ch: "我們需要食物和水才能生存。" },
+            { id: "u6-22", word: "clean up", part: "phr.", chinese: "打掃; 清理", sentence: "Let's clean up the room together.", sentence_ch: "我們一起來打掃房間吧。" },
+            { id: "u6-23", word: "full", part: "adj.", chinese: "飽的; 滿的", sentence: "I am full after dinner.", sentence_ch: "晚餐後我很飽。" },
+            { id: "u6-24", word: "healthy", part: "adj.", chinese: "健康的", sentence: "Vegetables are healthy food.", sentence_ch: "蔬菜是健康的食物。" },
+            { id: "u6-25", word: "thanks to", part: "phr.", chinese: "幸虧; 歸功於", sentence: "Thanks to you, we finished the work.", sentence_ch: "幸虧有你，我們完成了工作。" },
+            { id: "u6-26", word: "clean", part: "adj./v.", chinese: "乾淨的; 打掃", sentence: "Please keep your room clean.", sentence_ch: "請保持你的房間乾淨。" }
+        ];
+
+        // --- 資料庫 (在此處定義，確保前面的生成函式已存在) ---
         const UNITS_DATA = {
-            unitNumbers: {
-                title: "數字表 (1-100)",
+            unitCardinals: {
+                title: "數字",
                 vocab: generateNumberVocab(),
                 grammar: {
                     notes: [
@@ -384,50 +691,43 @@
                     scramble: generateNumberScramblePool()
                 }
             },
-            unit5: {
-                title: "Unit 5",
-                vocab: [
-                    { id: "u5-1", word: "date", part: "n.", chinese: "日期", sentence: "What is the date today?", sentence_ch: "今天是幾號？" },
-                    { id: "u5-2", word: "November", part: "n.", chinese: "十一月", sentence: "Thanksgiving is in November.", sentence_ch: "感恩節在十一月。" },
-                    { id: "u5-3", word: "first", part: "adj./adv.", chinese: "第一", sentence: "He is the first runner.", sentence_ch: "他是第一名跑者。" },
-                    { id: "u5-4", word: "Thanksgiving", part: "n.", chinese: "感恩節", sentence: "We eat turkey on Thanksgiving.", sentence_ch: "我們在感恩節吃火雞。" },
-                    { id: "u5-5", word: "important", part: "adj.", chinese: "重要的", sentence: "This is an important test.", sentence_ch: "這是一個重要的考試。" },
-                    { id: "u5-6", word: "holiday", part: "n.", chinese: "節日", sentence: "Christmas is a happy holiday.", sentence_ch: "聖誕節是一個快樂的節日。" },
-                    { id: "u5-7", word: "when", part: "adv.", chinese: "何時", sentence: "When is your birthday?", sentence_ch: "你的生日是什麼時候？" },
-                    { id: "u5-8", word: "fourth", part: "adj.", chinese: "第四", sentence: "The fourth month is April.", sentence_ch: "第四個月是四月。" },
-                    { id: "u5-9", word: "birthday", part: "n.", chinese: "生日", sentence: "Happy birthday to you!", sentence_ch: "祝你生日快樂！" },
-                    { id: "u5-10", word: "also", part: "adv.", chinese: "也", sentence: "I like apples, and I also like bananas.", sentence_ch: "我喜歡蘋果，我也喜歡香蕉。" },
-                    { id: "u5-11", word: "before", part: "prep.", chinese: "在...之前", sentence: "Wash your hands before dinner.", sentence_ch: "晚餐前要洗手。" },
-                    { id: "u5-12", word: "around", part: "prep.", chinese: "大約; 在...周圍", sentence: "It is around five o'clock.", sentence_ch: "現在大約五點鐘。" },
-                    { id: "u5-13", word: "How about...?", part: "phr.", chinese: "...怎麼樣？", sentence: "I am hungry. How about you?", sentence_ch: "我餓了。你呢？" },
-                    { id: "u5-14", word: "second", part: "adj.", chinese: "第二", sentence: "February is the second month.", sentence_ch: "二月是第二個月。" },
-                    { id: "u5-15", word: "next", part: "adj.", chinese: "下一個", sentence: "See you next week.", sentence_ch: "下週見。" },
-                    { id: "u5-16", word: "month", part: "n.", chinese: "月份", sentence: "There are twelve months in a year.", sentence_ch: "一年有十二個月。" },
-                    { id: "u5-17", word: "January", part: "n.", chinese: "一月", sentence: "January is the first month.", sentence_ch: "一月是第一個月。" },
-                    { id: "u5-18", word: "February", part: "n.", chinese: "二月", sentence: "Valentine's Day is in February.", sentence_ch: "情人節在二月。" },
-                    { id: "u5-19", word: "March", part: "n.", chinese: "三月", sentence: "Trees turn green in March.", sentence_ch: "樹木在三月變綠。" },
-                    { id: "u5-20", word: "April", part: "n.", chinese: "四月", sentence: "April showers bring May flowers.", sentence_ch: "四月的雨帶來五月的花。" },
-                    { id: "u5-21", word: "May", part: "n.", chinese: "五月", sentence: "Mother's Day is in May.", sentence_ch: "母親節在五月。" },
-                    { id: "u5-22", word: "June", part: "n.", chinese: "六月", sentence: "Father's Day is in June.", sentence_ch: "父親節在六月。" },
-                    { id: "u5-23", word: "July", part: "n.", chinese: "七月", sentence: "Summer vacation starts in July.", sentence_ch: "暑假在七月開始。" },
-                    { id: "u5-24", word: "August", part: "n.", chinese: "八月", sentence: "It is very hot in August.", sentence_ch: "八月非常熱。" },
-                    { id: "u5-25", word: "September", part: "n.", chinese: "九月", sentence: "School starts in September.", sentence_ch: "學校在九月開學。" },
-                    { id: "u5-26", word: "October", part: "n.", chinese: "十月", sentence: "Halloween is in October.", sentence_ch: "萬聖節在十月。" },
-                    { id: "u5-27", word: "December", part: "n.", chinese: "十二月", sentence: "Christmas is in December.", sentence_ch: "聖誕節在十二月。" },
-                    { id: "u5-28", word: "New Year's Eve", part: "n.", chinese: "跨年夜; 除夕", sentence: "We watch fireworks on New Year's Eve.", sentence_ch: "我們在跨年夜看煙火。" },
-                    { id: "u5-29", word: "Christmas", part: "n.", chinese: "聖誕節", sentence: "Santa comes on Christmas.", sentence_ch: "聖誕老公公在聖誕節來。" },
-                    { id: "u5-30", word: "third", part: "adj.", chinese: "第三", sentence: "March is the third month.", sentence_ch: "三月是第三個月。" },
-                    { id: "u5-31", word: "animal", part: "n.", chinese: "動物", sentence: "The dog is a cute animal.", sentence_ch: "狗是可愛的動物。" },
-                    { id: "u5-32", word: "cow", part: "n.", chinese: "母牛", sentence: "The cow gives us milk.", sentence_ch: "母牛給我們牛奶。" },
-                    { id: "u5-33", word: "think", part: "v.", chinese: "認為; 想", sentence: "I think it is going to rain.", sentence_ch: "我覺得要下雨了。" },
-                    { id: "u5-34", word: "lucky", part: "adj.", chinese: "幸運的", sentence: "You are a lucky boy.", sentence_ch: "你是個幸運的男孩。" },
-                    { id: "u5-35", word: "only", part: "adv.", chinese: "只有", sentence: "I have only one sister.", sentence_ch: "我只有一個妹妹。" },
-                    { id: "u5-36", word: "dinner", part: "n.", chinese: "晚餐", sentence: "We eat dinner at six thirty.", sentence_ch: "我們六點半吃晚餐。" }
-                ],
+            unitOrdinals: {
+                title: "序列",
+                vocab: generateOrdinalVocab(),
                 grammar: {
                     notes: [
-                        { title: "1. 詢問「節日或活動的時間」", rule: "When is + 節日/活動?", desc: "用來詢問特定日子。回答使用 It's on + 日期。", examples: ["When is your birthday?", "It's on November 24."] },
-                        { title: "2. 詢問與回答「今天的日期」", rule: "What's the date (today)?", desc: "回答格式為：It's + 月份 + 序數 (日期)。", examples: ["What's the date today?", "It's May tenth."] },
+                        { title: "1. 序數 (Ordinal Numbers)", rule: "first, second, third...", desc: "用來表示順序、日期或樓層。通常在基數後面加 th，但有不規則變化。", examples: ["It is the first day.", "She is on the second floor."] },
+                        { title: "2. 不規則變化 (Irregular)", rule: "1st, 2nd, 3rd, 5th, 9th, 12th", desc: "one->first, two->second, three->third, five->fifth, nine->ninth, twelve->twelfth。", examples: ["My birthday is on May fifth."] },
+                        { title: "3. 複合序數 (21st, 32nd...)", rule: "只變最後一個字", desc: "例如 21 變成 twenty-first，不是 twentieth-first。", examples: ["It is the twenty-first century."] },
+                        { title: "4. 整十的序數 (20th, 30th...)", rule: "ty -> tieth", desc: "例如 twenty -> twentieth, thirty -> thirtieth。", examples: ["It is his twentieth birthday."] }
+                    ],
+                    quiz: generateOrdinalQuizPool(),
+                    scramble: generateOrdinalScramblePool()
+                }
+            },
+            unit5: {
+                title: "Unit 5",
+                vocab: unit5VocabData,
+                grammar: {
+                    tips: [
+                        { label: "問日期", text: "使用 What's the date ...?" },
+                        { label: "問節日何時", text: "使用 When is ...?" },
+                        { label: "回答日期", text: "前面要加介系詞 on (It's on ...)" },
+                        { label: "序數拼寫", text: "注意 ve 變 f (five->fifth, twelve->twelfth)" }
+                    ],
+                    notes: [
+                        { 
+                            title: "1. 詢問「節日或活動的時間」", 
+                            rule: "When is + 節日/活動?", 
+                            desc: "用來詢問特定日子。回答使用 It's on + 日期。", 
+                            examples: ["When is your birthday?", "It's on November 24."] 
+                        },
+                        { 
+                            title: "2. 詢問與回答「今天的日期」", 
+                            rule: "What's the date (today)?", 
+                            desc: "回答格式為：It's + 月份 + 序數 (日期)。", 
+                            examples: ["What's the date today?", "It's May tenth."] 
+                        },
                         { 
                             title: "3. 序數 (Ordinal Numbers) 的用法與拼寫", 
                             rule: "不規則: first, second, third / 規則: th / 特殊拼寫", 
@@ -448,52 +748,46 @@
                         }
                     ],
                     quiz: generateUnit5QuizPool(),
-                    scramble: generateUnit5ScramblePool()
+                    scramble: generateUnit5GrammarScramblePool()
                 }
             },
             unit6: {
                 title: "Unit 6",
-                vocab: [
-                    { id: "u6-1", word: "lion", part: "n.", chinese: "獅子", sentence: "The lion is the king of animals.", sentence_ch: "獅子是萬獸之王。" },
-                    { id: "u6-2", word: "over there", part: "phr.", chinese: "在那邊", sentence: "The school is over there.", sentence_ch: "學校在那邊。" },
-                    { id: "u6-3", word: "king", part: "n.", chinese: "國王", sentence: "He is the king of this country.", sentence_ch: "他是這個國家的國王。" },
-                    { id: "u6-4", word: "some", part: "adj./pron.", chinese: "一些", sentence: "I have some apples.", sentence_ch: "我有一些蘋果。" },
-                    { id: "u6-5", word: "elephant", part: "n.", chinese: "大象", sentence: "The elephant has a long nose.", sentence_ch: "大象有長鼻子。" },
-                    { id: "u6-6", word: "so", part: "conj./adv.", chinese: "所以; 非常", sentence: "I am hungry, so I eat food.", sentence_ch: "我餓了，所以我吃東西。" },
-                    { id: "u6-7", word: "any", part: "adj./pron.", chinese: "任何; 一些", sentence: "Do you have any money?", sentence_ch: "你有任何錢嗎？" },
-                    { id: "u6-8", word: "tiger", part: "n.", chinese: "老虎", sentence: "The tiger runs fast.", sentence_ch: "老虎跑得很快。" },
-                    { id: "u6-9", word: "zebra", part: "n.", chinese: "斑馬", sentence: "The zebra is black and white.", sentence_ch: "斑馬是黑白相間的。" },
-                    { id: "u6-10", word: "back", part: "n./adv.", chinese: "背部; 後面", sentence: "There is a monkey on my back.", sentence_ch: "我的背上有一隻猴子。" },
-                    { id: "u6-11", word: "help", part: "v./n.", chinese: "幫忙", sentence: "Can you help me?", sentence_ch: "你可以幫我嗎？" },
-                    { id: "u6-12", word: "right", part: "adj./adv.", chinese: "正確的; 右邊", sentence: "You are right.", sentence_ch: "你是對的。" },
-                    { id: "u6-13", word: "monkey", part: "n.", chinese: "猴子", sentence: "The monkey likes bananas.", sentence_ch: "猴子喜歡香蕉。" },
-                    { id: "u6-14", word: "fox", part: "n.", chinese: "狐狸", sentence: "The fox is smart.", sentence_ch: "狐狸很聰明。" },
-                    { id: "u6-15", word: "horse", part: "n.", chinese: "馬", sentence: "I can ride a horse.", sentence_ch: "我會騎馬。" },
-                    { id: "u6-16", word: "rat", part: "n.", chinese: "大老鼠", sentence: "I see a big rat.", sentence_ch: "我看見一隻大老鼠。" },
-                    { id: "u6-17", word: "bear", part: "n.", chinese: "熊", sentence: "The bear is sleeping.", sentence_ch: "熊正在睡覺。" },
-                    { id: "u6-18", word: "world", part: "n.", chinese: "世界", sentence: "The world is beautiful.", sentence_ch: "這個世界很美麗。" },
-                    { id: "u6-19", word: "example", part: "n.", chinese: "例子", sentence: "This is a good example.", sentence_ch: "這是一個好例子。" },
-                    { id: "u6-20", word: "bug", part: "n.", chinese: "蟲子", sentence: "There is a bug on the leaf.", sentence_ch: "葉子上有一隻蟲子。" },
-                    { id: "u6-21", word: "food", part: "n.", chinese: "食物", sentence: "We need food and water.", sentence_ch: "我們需要食物和水。" },
-                    { id: "u6-22", word: "clean up", part: "phr.", chinese: "打掃; 清理", sentence: "Let's clean up the room.", sentence_ch: "我們來打掃房間吧。" },
-                    { id: "u6-23", word: "full", part: "adj.", chinese: "飽的; 滿的", sentence: "I am full.", sentence_ch: "我飽了。" },
-                    { id: "u6-24", word: "healthy", part: "adj.", chinese: "健康的", sentence: "Vegetables are healthy.", sentence_ch: "蔬菜很健康。" },
-                    { id: "u6-25", word: "thanks to", part: "phr.", chinese: "幸虧; 歸功於", sentence: "Thanks to you, we are safe.", sentence_ch: "多虧了你，我們很安全。" },
-                    { id: "u6-26", word: "clean", part: "adj./v.", chinese: "乾淨的; 打掃", sentence: "Please keep the room clean.", sentence_ch: "請保持房間乾淨。" }
-                ],
+                vocab: unit6VocabData,
                 grammar: {
+                    tips: [
+                        { label: "單數 (a/one)", text: "用 There is ..." },
+                        { label: "複數 (two/many)", text: "用 There are ..." },
+                        { label: "否定/疑問句", text: "複數名詞前面常加 any" },
+                        { label: "肯定句", text: "複數名詞前面常加 some" }
+                    ],
                     notes: [
-                        { title: "1. There is / There are (有...)", rule: "There is + 單數名詞 / There are + 複數名詞", desc: "用來表示某個地方「存在」著什麼人或物。", examples: ["There is a book on the desk.", "There are two cats."] },
-                        { title: "2. 否定句 (There isn't / aren't)", rule: "There is not (isn't) ... / There are not (aren't) ...", desc: "表示「沒有...」。複數否定句常搭配 any。", examples: ["There isn't a pen.", "There aren't any apples."] },
-                        { title: "3. 疑問句 (Is/Are there...?)", rule: "Is there a...? / Are there any...?", desc: "詢問「有...嗎？」。回答用 Yes, there is/are. 或 No, there isn't/aren't.", examples: ["Is there a dog?", "Are there any birds?"] }
+                        { 
+                            title: "1. There is / There are (有...)", 
+                            rule: "There is + 單數名詞 / There are + 複數名詞", 
+                            desc: "用來表示某個地方「存在」著什麼人或物。", 
+                            examples: ["There is a book on the desk.", "There are two cats."] 
+                        },
+                        { 
+                            title: "2. 否定句 (There isn't / aren't)", 
+                            rule: "There is not (isn't) ... / There are not (aren't) ...", 
+                            desc: "表示「沒有...」。複數否定句常搭配 any。", 
+                            examples: ["There isn't a pen.", "There aren't any apples."] 
+                        },
+                        { 
+                            title: "3. 疑問句 (Is/Are there...?)", 
+                            rule: "Is there a...? / Are there any...?", 
+                            desc: "詢問「有...嗎？」。回答用 Yes, there is/are. 或 No, there isn't/aren't.", 
+                            examples: ["Is there a dog?", "Are there any birds?"] 
+                        }
                     ],
                     quiz: generateUnit6QuizPool(),
-                    scramble: generateUnit6ScramblePool()
+                    scramble: generateUnit6GrammarScramblePool()
                 }
             }
         };
 
-        // --- 共用樣式 ---
+        // --- GameButton Component (Defined before use) ---
         const GameButton = ({ children, onClick, color = "blue", className = "", disabled = false, active = false }) => {
             const colorStyles = {
                 blue: "bg-sky-400 border-sky-600 text-white hover:bg-sky-300",
@@ -602,7 +896,7 @@
             );
         };
 
-        // --- 元件 2.1: 拼字測驗 (修正版) ---
+        // --- 元件 2.1: 拼字測驗 (修正版: 新增提示與查看答案) ---
         const SpellingQuiz = ({ data, onFinish }) => {
             const [currentQIndex, setCurrentQIndex] = useState(0);
             const [quizItems, setQuizItems] = useState([]);
@@ -611,6 +905,7 @@
             const [feedback, setFeedback] = useState(null); 
             const [score, setScore] = useState(0);
             const [targetPattern, setTargetPattern] = useState([]); 
+            const [targetClean, setTargetClean] = useState([]); 
 
             useEffect(() => {
                 if (!data || data.length === 0) return;
@@ -626,6 +921,8 @@
                 const rawWord = item.word.toLowerCase();
                 setTargetPattern(rawWord.split(''));
                 const cleanChars = rawWord.replace(/[^a-z]/g, '').split('');
+                setTargetClean(cleanChars);
+                
                 const scrambled = cleanChars.map((char, idx) => ({ char, id: idx, key: `${char}-${idx}-${Math.random()}` }));
                 setPoolLetters(shuffleArray([...scrambled]));
                 setCurrentLetters([]);
@@ -636,8 +933,38 @@
             const handlePoolClick = (l) => { if (feedback === 'correct') return; setPoolLetters(prev => prev.filter(p => p.key !== l.key)); setCurrentLetters(prev => [...prev, l]); };
             const handleAnswerClick = (l) => { if (feedback === 'correct') return; setCurrentLetters(prev => prev.filter(p => p.key !== l.key)); setPoolLetters(prev => [...prev, l]); };
 
+            const handleHint = () => {
+                if (feedback === 'correct') return;
+                const nextCharIndex = currentLetters.length;
+                if (nextCharIndex >= targetClean.length) return; 
+
+                const neededChar = targetClean[nextCharIndex];
+                const candidate = poolLetters.find(l => l.char === neededChar);
+                if (candidate) {
+                    handlePoolClick(candidate);
+                }
+            };
+
+            const handleSolve = () => {
+                if (feedback === 'correct') return;
+                
+                let tempPool = [...poolLetters, ...currentLetters];
+                const solution = [];
+                const remainingPool = [...tempPool];
+
+                for (const char of targetClean) {
+                    const foundIndex = remainingPool.findIndex(l => l.char === char);
+                    if (foundIndex !== -1) {
+                        solution.push(remainingPool[foundIndex]);
+                        remainingPool.splice(foundIndex, 1);
+                    }
+                }
+
+                setCurrentLetters(solution);
+                setPoolLetters(remainingPool);
+            };
+
             const checkAnswer = () => {
-                // 1. 新增：防止重複點擊加分
                 if (feedback === 'correct') return;
 
                 const currentItem = quizItems[currentQIndex];
@@ -683,7 +1010,6 @@
                         <button onClick={() => speakText(currentItem.word)} className="p-4 bg-sky-100 text-sky-500 rounded-full hover:bg-sky-200 active:scale-95 transition-colors border-4 border-sky-200"><Volume2 className="w-8 h-8" /></button>
                         <p className="mt-2 text-slate-400 text-xs font-bold">點擊喇叭聽發音</p>
                     </div>
-                    {/* 這裡增加了 relative 避免文字亂飄 */}
                     <div className="relative flex flex-wrap justify-center items-end gap-2 min-h-[80px] mb-6 p-4 bg-slate-200 rounded-3xl w-full border-inner border-4 border-slate-300">
                         {targetPattern.map((char, idx) => {
                             if (/[a-z]/.test(char)) {
@@ -705,7 +1031,16 @@
                              <button key={l.key} onClick={() => handlePoolClick(l)} className="w-12 h-14 bg-white text-slate-700 border-b-4 border-slate-300 rounded-xl font-black text-2xl shadow-sm hover:bg-slate-50 active:border-b-0 active:translate-y-1 transition-all">{l.char}</button>
                         ))}
                     </div>
-                    <div className={`w-full transition-all duration-300 ${feedback === 'wrong' ? 'animate-shake' : ''}`}>
+                    <div className={`w-full transition-all duration-300 flex flex-col gap-2 ${feedback === 'wrong' ? 'animate-shake' : ''}`}>
+                         <div className="flex gap-2 w-full">
+                            <GameButton onClick={handleHint} color="yellow" className="flex-1 text-sm py-3" disabled={feedback === 'correct'}>
+                                <Lightbulb className="w-4 h-4" /> 💡 提示一字
+                            </GameButton>
+                            <GameButton onClick={handleSolve} color="red" className="flex-1 text-sm py-3" disabled={feedback === 'correct'}>
+                                <Eye className="w-4 h-4" /> 👀 查看答案
+                            </GameButton>
+                         </div>
+
                          <GameButton onClick={checkAnswer} color={feedback === 'correct' ? 'green' : (feedback === 'wrong' ? 'red' : 'blue')} className="w-full py-4 text-xl" disabled={currentLetters.length === 0}>
                             {feedback === 'correct' ? <><CheckCircle /> Correct!</> : (feedback === 'wrong' ? <><XCircle /> Wrong!</> : "Check Answer")}
                         </GameButton>
@@ -784,7 +1119,7 @@
                 const wrongPart = userSentence.slice(firstWrongIndex);
                 const targetIdPrefix = `${firstWrongIndex}-`;
                 let nextWordObj = wrongPart.find(w => w.id.startsWith(targetIdPrefix));
-                let newAvailable = [...availableWords];
+                let newAvailable = [...newAvailable, ...others];
                 if (nextWordObj) {
                     const others = wrongPart.filter(w => w.id !== nextWordObj.id);
                     newAvailable = [...newAvailable, ...others];
@@ -907,6 +1242,8 @@
             const [quizData, setQuizData] = useState([]);
             const [selectedOption, setSelectedOption] = useState(null);
             const [spellingData, setSpellingData] = useState([]); // 新增：用於儲存過濾後的拼字資料
+            const [timeLeft, setTimeLeft] = useState(7); // 新增：倒數時間狀態
+            const [history, setHistory] = useState([]); // 新增：答題歷史紀錄
 
             const startChoiceQuiz = () => {
                 if (!data || data.length === 0) return;
@@ -918,6 +1255,7 @@
                     allVocabQuestions.push({
                         questionText: target.word,
                         correctId: target.id,
+                        correctAnswer: target.chinese, // 紀錄正確答案文字
                         options: shuffleArray([target, ...distractors1]).map(o => ({
                             id: o.id,
                             text: o.chinese,
@@ -932,6 +1270,7 @@
                     allVocabQuestions.push({
                         questionText: target.chinese,
                         correctId: target.id,
+                        correctAnswer: target.word, // 紀錄正確答案文字
                         options: shuffleArray([target, ...distractors2]).map(o => ({
                             id: o.id,
                             text: o.word,
@@ -948,9 +1287,11 @@
                 setQuizData(selectedQuestions);
                 setCurrentQIndex(0);
                 setScore(0);
+                setHistory([]);
                 setSelectedOption(null);
                 setQuizType('choice');
                 setStatus('playing');
+                setTimeLeft(7); // 重置時間
             };
 
             const startSpellingQuiz = (type) => {
@@ -976,21 +1317,70 @@
 
             const handleOptionClick = (option) => {
                 if (selectedOption) return; 
-                setSelectedOption(option);
+                
+                // 計算分數 (剩餘時間比例 * 100，無條件進位)
+                let points = 0;
+                if (option.isCorrect) {
+                    points = Math.ceil((timeLeft / 7.0) * 100);
+                    // 確保至少有一點分數 (如果正確且時間未到)
+                    if (points <= 0 && timeLeft > 0) points = 10; 
+                }
+
                 const currentQ = quizData[currentQIndex];
+                
+                // 記錄歷史
+                setHistory(prev => [...prev, {
+                    q: currentQ.questionText,
+                    correct: currentQ.correctAnswer,
+                    user: option.text,
+                    isCorrect: option.isCorrect,
+                    points: points
+                }]);
+
+                setSelectedOption(option);
                 if (currentQ.audio) speakText(currentQ.audio);
                 
-                if (option.isCorrect) setScore(prev => prev + 10);
+                if (option.isCorrect) {
+                    setScore(prev => prev + points);
+                }
             };
 
             const nextQuestion = () => {
                 if (currentQIndex < quizData.length - 1) {
                     setCurrentQIndex(prev => prev + 1);
                     setSelectedOption(null);
+                    setTimeLeft(7); // 重置時間
                 } else {
                     setStatus('result');
                 }
             };
+
+            // 倒數計時器 Effect
+            useEffect(() => {
+                if (status !== 'playing' || quizType !== 'choice' || selectedOption) return;
+
+                if (timeLeft <= 0) {
+                    // 時間到處理邏輯
+                    const currentQ = quizData[currentQIndex];
+                    setHistory(prev => [...prev, {
+                        q: currentQ.questionText,
+                        correct: currentQ.correctAnswer,
+                        user: "(逾時)",
+                        isCorrect: false,
+                        points: 0
+                    }]);
+
+                    setSelectedOption({ id: 'timeout' }); // 標記為超時
+                    speakText("Time's up");
+                    return;
+                }
+
+                const timer = setInterval(() => {
+                    setTimeLeft(prev => prev - 1);
+                }, 1000);
+
+                return () => clearInterval(timer);
+            }, [timeLeft, status, quizType, selectedOption]);
 
             // 計算是否有片語，決定是否顯示「片語篇」按鈕
             const hasPhrases = data ? data.some(item => item.part === 'phr.') : false;
@@ -1004,7 +1394,7 @@
                         {/* 選擇題 (大亂鬥) */}
                         <button onClick={startChoiceQuiz} className="w-full max-w-xs bg-white border-4 border-slate-200 p-5 rounded-3xl hover:border-sky-400 group transition-all shadow-sm hover:shadow-md text-left relative overflow-hidden">
                             <div className="absolute right-[-20px] top-[-20px] bg-sky-100 w-24 h-24 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-                            <div className="relative z-10 flex items-center gap-4"><div className="bg-sky-500 text-white p-3 rounded-2xl"><MousePointerClick className="w-6 h-6" /></div><div><h3 className="text-lg font-black text-slate-800">選擇題大挑戰</h3><p className="text-xs text-slate-500 font-bold">10題 單字/片語 測驗</p></div></div>
+                            <div className="relative z-10 flex items-center gap-4"><div className="bg-sky-500 text-white p-3 rounded-2xl"><MousePointerClick className="w-6 h-6" /></div><div><h3 className="text-lg font-black text-slate-800">選擇題大挑戰</h3><p className="text-xs text-slate-500 font-bold">10題 限時搶答 (每題7秒)</p></div></div>
                         </button>
 
                         <div className="w-full max-w-xs space-y-3">
@@ -1031,12 +1421,70 @@
             }
 
             if (status === 'result') {
+                // 評語邏輯
+                let feedbackTitle = "";
+                let feedbackColor = "";
+                if (score >= 900) {
+                    feedbackTitle = "厲害！";
+                    feedbackColor = "text-yellow-500";
+                } else if (score >= 800) {
+                    feedbackTitle = "不錯！";
+                    feedbackColor = "text-emerald-500";
+                } else if (score >= 700) {
+                    feedbackTitle = "還可以";
+                    feedbackColor = "text-sky-500";
+                } else {
+                    feedbackTitle = "加油加油再測一次";
+                    feedbackColor = "text-slate-500";
+                }
+
                 return (
-                    <div className="flex flex-col items-center justify-center h-full animate-in zoom-in py-10">
-                        <Trophy className="w-32 h-32 text-yellow-400 drop-shadow-xl animate-bounce" />
-                        <h2 className="text-4xl font-black text-slate-800 mb-2 mt-4">任務完成！</h2>
-                        <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-500 drop-shadow-sm mb-8">{score}</div>
-                        <GameButton onClick={() => setStatus('menu')} color="green" className="w-64 text-xl py-4">回到選單</GameButton>
+                    <div className="flex flex-col h-full animate-in zoom-in pt-4 pb-20 overflow-y-auto">
+                        <div className="flex flex-col items-center justify-center mb-6">
+                            <Trophy className={`w-24 h-24 drop-shadow-xl animate-bounce mb-2 ${score >= 800 ? 'text-yellow-400' : 'text-slate-300'}`} />
+                            <h2 className={`text-3xl font-black mb-1 ${feedbackColor}`}>{feedbackTitle}</h2>
+                            <div className="text-6xl font-black text-slate-800 mb-2">{score} <span className="text-xl text-slate-400">分</span></div>
+                        </div>
+
+                        {/* 成績總表 */}
+                        <div className="bg-white rounded-2xl shadow-sm border-2 border-slate-200 overflow-hidden mx-1 mb-6">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
+                                    <tr>
+                                        <th className="px-3 py-3 w-10">#</th>
+                                        <th className="px-3 py-3">題目</th>
+                                        <th className="px-3 py-3 text-center">得分</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {history.map((record, idx) => (
+                                        <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                                            <td className="px-3 py-3 font-bold text-slate-400">{idx + 1}</td>
+                                            <td className="px-3 py-3">
+                                                <div className="font-bold text-slate-700">{record.q}</div>
+                                                <div className="flex flex-col text-xs mt-1 gap-0.5">
+                                                    <div className={record.isCorrect ? "text-emerald-600" : "text-rose-500 font-bold"}>
+                                                        {record.isCorrect ? "●" : "✕"} 您選: {record.user}
+                                                    </div>
+                                                    {!record.isCorrect && (
+                                                        <div className="text-emerald-600 font-bold">
+                                                            ✓ 正解: {record.correct}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-3 text-center font-black text-slate-700">
+                                                {record.points > 0 ? <span className="text-emerald-500">+{record.points}</span> : <span className="text-slate-300">0</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="flex justify-center pb-8">
+                            <GameButton onClick={() => setStatus('menu')} color="green" className="w-64 text-xl py-4">回到選單</GameButton>
+                        </div>
                     </div>
                 );
             }
@@ -1050,7 +1498,18 @@
             return (
                 <div className="flex flex-col h-full max-w-md mx-auto">
                     <div className="mb-4 px-1 flex items-center justify-between"><div className="bg-white border-2 border-slate-200 px-3 py-1 rounded-full font-black text-slate-400 text-xs shadow-sm">STAGE {currentQIndex + 1} / {quizData.length}</div><div className="bg-yellow-100 border-2 border-yellow-300 px-3 py-1 rounded-full font-black text-yellow-700 text-xs shadow-sm">SCORE: {score}</div></div>
-                    <div className="h-4 bg-slate-200 rounded-full overflow-hidden border-2 border-slate-300 mb-6 mx-1"><div className="h-full bg-gradient-to-r from-lime-400 to-emerald-500 transition-all duration-300 border-r-2 border-white/50" style={{ width: `${((currentQIndex + 1) / quizData.length) * 100}%` }}></div></div>
+                    
+                    {/* 時間倒數條 */}
+                    <div className="relative h-6 bg-slate-100 rounded-full overflow-hidden border-2 border-slate-300 mb-4 mx-1">
+                        <div 
+                            className={`h-full transition-all duration-1000 ease-linear ${timeLeft <= 3 ? 'bg-rose-500' : 'bg-sky-400'}`} 
+                            style={{ width: `${(timeLeft / 7) * 100}%` }}
+                        ></div>
+                        <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-slate-600 drop-shadow-sm">
+                            <Timer className="w-3 h-3 mr-1" /> {timeLeft}s (滿分遞減)
+                        </div>
+                    </div>
+
                     <div className="bg-white border-4 border-b-8 border-violet-200 rounded-3xl p-8 mb-6 text-center relative overflow-hidden shadow-sm group">
                         <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-violet-100 text-violet-600 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider">Question</div>
                         <h2 className="font-black text-3xl text-slate-800 mt-6 leading-relaxed">{currentQ.questionText}</h2>
@@ -1059,10 +1518,13 @@
                     <div className="grid grid-cols-1 gap-3 pb-8">
                         {currentQ.options.map((option, idx) => {
                             let color = "white";
+                            // 如果已選擇(包括時間到)
                             if (selectedOption) {
-                                if (option.isCorrect) color = "green";
-                                else if (selectedOption.id === option.id && !option.isCorrect) color = "red";
+                                if (option.isCorrect) color = "green"; // 正確答案總是顯示綠色
+                                else if (selectedOption.id === option.id && !option.isCorrect) color = "red"; // 如果選錯了顯示紅色
+                                else if (selectedOption.id === 'timeout' && !option.isCorrect) color = "white"; // 時間到沒選的顯示白色
                             }
+                            
                             return (
                                 <GameButton key={idx} disabled={!!selectedOption} onClick={() => handleOptionClick(option)} color={color} className={`justify-between py-4 text-left ${!selectedOption && "hover:bg-slate-50"}`}>
                                     <span className="text-lg">{option.text}</span>
@@ -1077,55 +1539,77 @@
             );
         };
 
-        // --- 元件 4: 文法模式 (修正：增加測驗題數) ---
+        // --- 元件 4: 文法模式 (修正：10題隨機，音效，結算頁面，即時完整解釋，題目顏色反饋) ---
         const GrammarMode = ({ grammarData }) => {
             const [mode, setMode] = useState('notes'); // 'notes', 'quiz', 'scramble'
             const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
             const [score, setScore] = useState(0);
-            const [showResult, setShowResult] = useState(false);
+            const [status, setStatus] = useState('menu'); // 'menu', 'playing', 'result'
             const [selectedOption, setSelectedOption] = useState(null);
             const [quizList, setQuizList] = useState([]);
+            const [history, setHistory] = useState([]); // 紀錄答題歷史
 
             // 輔助函式：處理題庫資料，確保選項被打亂
             const prepareQuizData = (rawList) => {
                 if (!rawList) return [];
-                return rawList.map(item => ({
+                // 隨機選取 10 題
+                const selected = shuffleArray([...rawList]).slice(0, 10);
+                return selected.map(item => ({
                     ...item,
-                    options: shuffleArray([...item.options]) // 在這裡強制打亂選項
+                    options: shuffleArray([...item.options]) // 強制打亂選項
                 }));
             };
 
             useEffect(() => {
-                // 文法挑戰：從題庫中選 50 題 (如果不足則全選)
-                if (grammarData?.quiz) { 
-                    const raw = shuffleArray([...grammarData.quiz]).slice(0, 50); // 改成 50
-                    setQuizList(prepareQuizData(raw)); 
-                }
+                // 初始化
                 setMode('notes');
-                setCurrentQuizIndex(0);
-                setScore(0);
-                setShowResult(false);
-                setSelectedOption(null);
+                setStatus('menu');
             }, [grammarData]);
 
-            const handleOptionClick = (option, correctAns) => {
+            const startQuiz = () => {
+                if (grammarData?.quiz) { 
+                    setQuizList(prepareQuizData(grammarData.quiz));
+                    setCurrentQuizIndex(0);
+                    setScore(0);
+                    setHistory([]);
+                    setSelectedOption(null);
+                    setStatus('playing');
+                }
+            };
+
+            const handleOptionClick = (option, correctAns, qItem) => {
                 if (selectedOption) return;
                 setSelectedOption(option);
-                if (option === correctAns) { setScore(prev => prev + 10); speakText("Correct"); } else { speakText("Wrong"); }
+                
+                const isCorrect = option === correctAns;
+                if (isCorrect) { 
+                    setScore(prev => prev + 10); 
+                    playSound('correct');
+                } else { 
+                    playSound('wrong'); 
+                }
+
+                // 記錄歷史
+                setHistory(prev => [...prev, {
+                    question: qItem.q,
+                    userAns: option,
+                    correctAns: correctAns,
+                    isCorrect: isCorrect,
+                    hint: qItem.hint
+                }]);
             };
 
             const nextQuestion = () => {
-                if (currentQuizIndex < quizList.length - 1) { setCurrentQuizIndex(prev => prev + 1); setSelectedOption(null); } else { setShowResult(true); }
+                if (currentQuizIndex < quizList.length - 1) { 
+                    setCurrentQuizIndex(prev => prev + 1); 
+                    setSelectedOption(null); 
+                } else { 
+                    setStatus('result'); 
+                }
             };
 
             const restartQuiz = () => {
-                // 重新挑戰時，再次隨機抽取並打亂選項
-                const raw = shuffleArray([...grammarData.quiz]).slice(0, 50); // 改成 50
-                setQuizList(prepareQuizData(raw));
-                setCurrentQuizIndex(0);
-                setScore(0);
-                setShowResult(false);
-                setSelectedOption(null);
+                startQuiz();
             };
 
             if (!grammarData || !grammarData.notes) return <div>Grammar content coming soon!</div>;
@@ -1134,12 +1618,30 @@
                 <div className="flex flex-col h-full animate-in fade-in">
                     <div className="flex justify-center mb-6 gap-2">
                         <GameButton onClick={() => setMode('notes')} active={mode === 'notes'} color="white" className="text-sm px-3"><PenTool className="w-4 h-4" /> 筆記</GameButton>
-                        <GameButton onClick={() => setMode('quiz')} active={mode === 'quiz'} color="white" className="text-sm px-3"><CheckCircle className="w-4 h-4" /> 挑戰</GameButton>
+                        <GameButton onClick={() => { setMode('quiz'); startQuiz(); }} active={mode === 'quiz'} color="white" className="text-sm px-3"><CheckCircle className="w-4 h-4" /> 挑戰</GameButton>
                         <GameButton onClick={() => setMode('scramble')} active={mode === 'scramble'} color="white" className="text-sm px-3"><Puzzle className="w-4 h-4" /> 句型重組</GameButton>
                     </div>
 
                     {mode === 'notes' && (
                         <div className="flex-1 overflow-y-auto pb-20 space-y-4">
+                            {/* 新增 Tip 區塊 */}
+                            {grammarData.tips && (
+                                <div className="bg-yellow-50 border-4 border-yellow-200 rounded-3xl p-5 mb-4 shadow-sm animate-in slide-in-from-top-2">
+                                    <h3 className="text-xl font-black text-yellow-700 mb-3 flex items-center gap-2">
+                                        <Lightbulb className="w-6 h-6 fill-yellow-400 text-yellow-600" /> 
+                                        作答小技巧 (Exam Tips)
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {grammarData.tips.map((tip, i) => (
+                                            <div key={i} className="bg-white p-3 rounded-xl border-l-4 border-yellow-400 shadow-sm flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                                                <span className="font-black text-slate-700 bg-yellow-100 px-2 py-0.5 rounded text-sm whitespace-nowrap">{tip.label}</span>
+                                                <span className="text-slate-600 text-sm font-bold">{tip.text}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {grammarData.notes.map((note, idx) => (
                                 <div key={idx} className="bg-white border-4 border-slate-200 rounded-3xl p-6 shadow-sm hover:border-indigo-300 transition-colors">
                                     <h3 className="text-xl font-black text-indigo-600 mb-2 flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 text-sm">{idx+1}</div>{note.title}</h3>
@@ -1150,33 +1652,85 @@
                             ))}
                         </div>
                     )}
+                    
                     {mode === 'scramble' && <ScrambleMode data={grammarData.scramble || []} titleOverride="GRAMMAR SCRAMBLE" />}
+                    
                     {mode === 'quiz' && (
-                        showResult ? (
-                            <div className="flex flex-col items-center justify-center h-full animate-in zoom-in py-10">
-                                <Trophy className="w-24 h-24 text-yellow-400 drop-shadow-lg mb-4" />
-                                <h2 className="text-3xl font-black text-slate-800 mb-2">文法大師！</h2>
-                                <div className="text-6xl font-black text-indigo-600 mb-8">{score}</div>
-                                <GameButton onClick={restartQuiz} color="green" className="w-48 text-lg">再測驗一次</GameButton>
+                        status === 'result' ? (
+                            <div className="flex flex-col h-full animate-in zoom-in pb-20 overflow-y-auto">
+                                <div className="flex flex-col items-center justify-center mb-6 pt-4">
+                                    <Trophy className="w-20 h-20 text-yellow-400 drop-shadow-lg mb-2" />
+                                    <h2 className="text-3xl font-black text-slate-800 mb-1">測驗完成！</h2>
+                                    <div className="text-5xl font-black text-indigo-600 mb-4">{score} <span className="text-xl text-slate-400">分</span></div>
+                                    <GameButton onClick={restartQuiz} color="green" className="w-48 text-lg">再測驗一次</GameButton>
+                                </div>
+                                
+                                <div className="space-y-4 px-2">
+                                    {history.map((item, idx) => (
+                                        <div key={idx} className={`bg-white border-l-8 rounded-xl p-4 shadow-sm ${item.isCorrect ? 'border-emerald-400' : 'border-rose-400'}`}>
+                                            <div className="flex items-start gap-3 mb-2">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${item.isCorrect ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                                                    {item.isCorrect ? <CheckCircle size={18} /> : <XCircle size={18} />}
+                                                </div>
+                                                <div className="flex-1">
+                                                    {/* 結果列表題目中也填入正確答案 */}
+                                                    <h4 className="font-bold text-slate-800 text-lg">
+                                                        {item.question.split('______').map((part, i, arr) => (
+                                                            <React.Fragment key={i}>
+                                                                {part}
+                                                                {i < arr.length - 1 && <span className="text-emerald-600 border-b-2 border-emerald-400 px-1">{item.correctAns}</span>}
+                                                            </React.Fragment>
+                                                        ))}
+                                                    </h4>
+                                                    <div className="flex flex-wrap gap-2 mt-2 text-sm">
+                                                        <span className={`px-2 py-1 rounded font-bold ${item.isCorrect ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                            你的答案: {item.userAns}
+                                                        </span>
+                                                        {!item.isCorrect && (
+                                                            <span className="px-2 py-1 rounded font-bold bg-emerald-100 text-emerald-700">
+                                                                正解: {item.correctAns}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* 顯眼的解釋卡片 */}
+                                            <div className="mt-3 bg-indigo-50 border-2 border-indigo-100 rounded-lg p-3 flex items-start gap-2">
+                                                <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
+                                                <p className="text-indigo-700 text-sm font-bold">{item.hint}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col h-full max-w-md mx-auto relative">
+                            <div className="flex flex-col h-full max-w-md mx-auto relative pt-4">
                                 {quizList.length > 0 && (
                                     <>
                                         <div className="mb-4 flex justify-between items-center px-1">
                                             <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Question {currentQuizIndex + 1} / {quizList.length}</span>
                                             <span className="text-xs font-black text-yellow-600 bg-yellow-100 px-2 py-1 rounded-lg">SCORE: {score}</span>
                                         </div>
-                                        <div className="bg-white border-4 border-b-8 border-indigo-200 rounded-3xl p-6 mb-4 min-h-[140px] flex items-center justify-center text-center shadow-sm relative">
+                                        <div className="bg-white border-4 border-b-8 border-indigo-200 rounded-3xl p-6 mb-6 min-h-[140px] flex items-center justify-center text-center shadow-sm relative">
                                             <h3 className="text-xl font-black text-slate-700 leading-relaxed">
                                                 {quizList[currentQuizIndex].q.split('______').map((part, i, arr) => (
                                                     <React.Fragment key={i}>
                                                         {part}
-                                                        {i < arr.length - 1 && <span className="inline-block min-w-[60px] border-b-4 border-indigo-400 mx-1 text-indigo-600">{selectedOption === quizList[currentQuizIndex].ans ? quizList[currentQuizIndex].ans : "?"}</span>}
+                                                        {i < arr.length - 1 && (
+                                                            selectedOption ? (
+                                                                // 已作答狀態：直接填入正確答案，用顏色區分對錯
+                                                                <span className={`inline-block min-w-[60px] border-b-4 mx-1 font-black ${selectedOption === quizList[currentQuizIndex].ans ? 'text-emerald-500 border-emerald-400' : 'text-rose-500 border-rose-400'}`}>
+                                                                    {quizList[currentQuizIndex].ans}
+                                                                </span>
+                                                            ) : (
+                                                                // 未作答狀態：顯示問號
+                                                                <span className="inline-block min-w-[60px] border-b-4 mx-1 font-bold text-indigo-600 border-indigo-400">?</span>
+                                                            )
+                                                        )}
                                                     </React.Fragment>
                                                 ))}
                                             </h3>
-                                            {selectedOption && <div className="absolute -bottom-4 bg-indigo-500 text-white text-xs px-3 py-1 rounded-full font-bold shadow-sm animate-in fade-in slide-in-from-bottom-1">Hint: {quizList[currentQuizIndex].hint}</div>}
                                         </div>
                                         <div className="grid grid-cols-1 gap-3">
                                             {quizList[currentQuizIndex].options.map((opt, idx) => {
@@ -1187,7 +1741,7 @@
                                                     else if (selectedOption === opt) btnColor = "red";
                                                 }
                                                 return (
-                                                    <GameButton key={idx} onClick={() => handleOptionClick(opt, quizList[currentQuizIndex].ans)} disabled={!!selectedOption} color={btnColor} className="py-3 text-lg justify-between">
+                                                    <GameButton key={idx} onClick={() => handleOptionClick(opt, quizList[currentQuizIndex].ans, quizList[currentQuizIndex])} disabled={!!selectedOption} color={btnColor} className="py-3 text-lg justify-between">
                                                         {opt}
                                                         {selectedOption && isCorrect && <CheckCircle className="w-5 h-5" />}
                                                         {selectedOption === opt && !isCorrect && <XCircle className="w-5 h-5" />}
@@ -1195,7 +1749,33 @@
                                                 )
                                             })}
                                         </div>
-                                        {selectedOption && <div className="mt-6 flex justify-center"><GameButton onClick={nextQuestion} color="blue" className="w-full text-lg py-3 animate-in slide-in-from-bottom-2">{currentQuizIndex < quizList.length - 1 ? "下一題" : "看成績"} <ChevronRight className="w-5 h-5" /></GameButton></div>}
+                                        
+                                        {/* 即時完整解釋區塊 (不論對錯都顯示) */}
+                                        {selectedOption && (
+                                            <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
+                                                <div className={`p-4 rounded-xl border-l-4 mb-4 shadow-sm ${selectedOption === quizList[currentQuizIndex].ans ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : 'bg-rose-50 border-rose-500 text-rose-900'}`}>
+                                                    <div className="flex items-center gap-2 mb-2 font-black text-lg">
+                                                        {selectedOption === quizList[currentQuizIndex].ans ? 
+                                                            <><CheckCircle className="w-6 h-6" /> 答對了！</> : 
+                                                            <><XCircle className="w-6 h-6" /> 答錯了！</>
+                                                        }
+                                                    </div>
+                                                    {!selectedOption === quizList[currentQuizIndex].ans && (
+                                                        <div className="mb-2 text-sm font-bold">正確答案是：<span className="text-lg mx-1 underline">{quizList[currentQuizIndex].ans}</span></div>
+                                                    )}
+                                                    {/* 完整解釋 (移除紫色圓圈，改為純文字標籤) */}
+                                                    <div className="bg-white/80 p-3 rounded-lg border border-black/10 shadow-inner">
+                                                        <p className="text-sm text-slate-500 font-bold mb-1">解釋：</p>
+                                                        <p className="text-base font-bold text-slate-800">{quizList[currentQuizIndex].hint}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-center">
+                                                    <GameButton onClick={nextQuestion} color="blue" className="w-full text-lg py-3 shadow-lg border-b-4 border-blue-600 active:border-b-0">
+                                                        {currentQuizIndex < quizList.length - 1 ? "下一題" : "看成績"} <ChevronRight className="w-5 h-5" />
+                                                    </GameButton>
+                                                </div>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -1208,7 +1788,7 @@
         // --- Main App Container ---
         function Unit34App() {
             const [activeTab, setActiveTab] = useState('study');
-            const [currentUnit, setCurrentUnit] = useState('unitNumbers'); 
+            const [currentUnit, setCurrentUnit] = useState('unitCardinals'); 
 
             const unitTitle = UNITS_DATA[currentUnit].title;
             const unitData = UNITS_DATA[currentUnit].vocab;
@@ -1220,11 +1800,11 @@
                 <div className="min-h-screen font-sans text-slate-800 flex flex-col bg-sky-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
                 <div className="bg-white/90 backdrop-blur-sm sticky top-0 z-50 border-b-4 border-slate-200">
                     <div className="max-w-md mx-auto px-4 py-3">
-                    <div className="flex justify-between items-center mb-3 bg-slate-100 p-2 rounded-2xl border-2 border-slate-200">
-                        <div className="flex items-center gap-2 font-black text-slate-600 text-lg tracking-tight ml-2"><Map className="w-6 h-6 text-sky-500" /><span>MAP</span></div>
+                    <div className="flex justify-between items-center mb-3 bg-slate-100 p-2 rounded-2xl border-2 border-slate-200 overflow-x-auto">
+                        <div className="flex items-center gap-2 font-black text-slate-600 text-lg tracking-tight ml-2 mr-2 whitespace-nowrap"><Map className="w-6 h-6 text-sky-500" /><span>MAP</span></div>
                         <div className="flex gap-2">
-                            {['unitNumbers', 'unit5', 'unit6'].map(uKey => (
-                            <button key={uKey} onClick={() => setCurrentUnit(uKey)} className={`px-3 py-1 text-xs sm:text-sm font-black rounded-xl transition-all border-b-4 active:border-b-0 active:translate-y-1 ${currentUnit === uKey ? 'bg-sky-500 border-sky-700 text-white shadow-sky-200' : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50'}`}>{UNITS_DATA[uKey].title}</button>
+                            {['unitCardinals', 'unitOrdinals', 'unit5', 'unit6'].map(uKey => (
+                            <button key={uKey} onClick={() => setCurrentUnit(uKey)} className={`px-3 py-1 text-xs sm:text-sm font-black rounded-xl transition-all border-b-4 active:border-b-0 active:translate-y-1 whitespace-nowrap ${currentUnit === uKey ? 'bg-sky-500 border-sky-700 text-white shadow-sky-200' : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50'}`}>{UNITS_DATA[uKey].title}</button>
                             ))}
                         </div>
                     </div>
